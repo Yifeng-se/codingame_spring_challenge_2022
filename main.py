@@ -132,8 +132,8 @@ class hero():
                 self.patrol_x = base_x + 6000 if base_x == 0 else base_x - 6000
                 self.patrol_y = base_y + 2200 if base_y == 0 else base_y - 2200
         else:
-            self.patrol_x = enemy_x + 4000 if enemy_x == 0 else enemy_x - 4000
-            self.patrol_y = enemy_y + 4000 if enemy_y == 0 else enemy_y - 4000
+            self.patrol_x = enemy_x + 6000 if enemy_x == 0 else enemy_x - 6000
+            self.patrol_y = enemy_y + 6000 if enemy_y == 0 else enemy_y - 6000
 
 # game loop
 while True:
@@ -212,9 +212,10 @@ while True:
             # 2. other threat
             if curr_hero.target_x is None:
                 curr_hero.find_closest_threat(threat_m)
-            # 3. No threat, go to any monster close to patrol point
+            # 3. No threat, if hero is in care area, go to any monster close to patrol point
             if curr_hero.target_x is None:
-                curr_hero.find_closest_patrol(l_monster)
+                if curr_hero.check_care_area(curr_hero) or not curr_hero.defence:
+                    curr_hero.find_closest_patrol(l_monster)
             # 99. No target, it will go to patrol point
 
             
