@@ -98,20 +98,22 @@ class hero():
         # print("curr_mana: " + str(curr_mana), file=sys.stderr, flush=True)
         iWindCnt = 0
         lControlCnt = []
+        lShieldCnt = []
 
         for m in l_monster:
             if not m.shld_lf and self.get_distance(m) < pow(1280, 2):
                 iWindCnt += 1
-            if not m.shld_lf and self.get_distance(m) < pow(2200, 2):
+            if not m.shld_lf and self.get_distance(m) < pow(2200, 2) and m.threatFor != 2:
                 lControlCnt.append(m)
+            if not m.shld_lf and self.get_distance(m) < pow(2200, 2) and m.threatFor == 2:
+                lShieldCnt.append(m)
 
         if iWindCnt > 1 and curr_mana > 10:
             self.wind_spell = True
         elif len(lControlCnt) > 0 and curr_mana > 10:
-            if lControlCnt[0].threatFor == 2 and not self.defence:
-                self.shield_spell = str(lControlCnt[0].id)
-            else:
-                self.control_spell = str(lControlCnt[0].id)
+            self.control_spell = str(lControlCnt[0].id)
+        elif len(lShieldCnt) > 0 and not self.defence and curr_mana > 10:
+            self.shield_spell = str(lControlCnt[0].id)
 
         return self.wind_spell or self.control_spell or self.shield_spell
 
