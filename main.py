@@ -113,7 +113,7 @@ class hero():
         elif len(lControlCnt) > 0 and curr_mana > 10:
             self.control_spell = str(lControlCnt[0].id)
         elif len(lShieldCnt) > 0 and not self.defence and curr_mana > 10:
-            self.shield_spell = str(lControlCnt[0].id)
+            self.shield_spell = str(lShieldCnt[0].id)
 
         return self.wind_spell or self.control_spell or self.shield_spell
 
