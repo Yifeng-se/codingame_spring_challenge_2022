@@ -35,11 +35,13 @@ class hero():
         self.id = id
         self.x = x
         self.y = y
+        self.defence = True
     
     def reset_target(self):
         self.target_x = None
         self.target_y = None
         self.wind_spell = None
+        self.control_spell = None
 
     def get_distance(self, oppo):
         return pow(self.x-oppo.x, 2) + pow(self.y-oppo.y, 2)
@@ -72,16 +74,41 @@ class hero():
     def spell_check(self, l_monster, curr_mana):
         # How many monster around me?
         # print("curr_mana: " + str(curr_mana), file=sys.stderr, flush=True)
-        iCnt = 0
+        iWindCnt = 0
+        lControlCnt = []
+
         for m in l_monster:
-            if self.get_distance(m) < pow(1280, 2) + pow(1280, 2):
-                iCnt += 1
-        if iCnt > 0 and curr_mana > 10:
+            if self.get_distance(m) < pow(1280, 2):
+                iWindCnt += 1
+            if self.get_distance(m) < pow(2200, 2):
+                lControlCnt.append(m)
+
+        if iWindCnt > 1 and curr_mana > 10:
             self.wind_spell = True
-        return self.wind_spell
+        elif len(lControlCnt) > 0 and curr_mana > 10:
+            self.control_spell = str(lControlCnt[0].id)
+
+        return self.wind_spell or self.control_spell
 
     def set_base_distance(self, base_x, base_y):
         self.base_distance = pow(self.x-base_x, 2) + pow(self.y-base_y, 2)
+
+    def set_patrol_target(self):
+        global base_x, base_y, enemy_x, enemy_y
+
+        if self.defence:
+            if self.id % 3 == 0:
+                self.patrol_x = base_x + 2200 if base_x == 0 else base_x - 2200
+                self.patrol_y = base_y + 6000 if base_y == 0 else base_y - 6000
+            elif self.id % 3 == 1:
+                self.patrol_x = base_x + 6000 if base_x == 0 else base_x - 6000
+                self.patrol_y = base_y + 6000 if base_y == 0 else base_y - 6000
+            elif self.id % 3 == 2:
+                self.patrol_x = base_x + 6000 if base_x == 0 else base_x - 6000
+                self.patrol_y = base_y + 2200 if base_y == 0 else base_y - 2200
+        else:
+            self.patrol_x = enemy_x
+            self.patrol_y = enemy_y
 
 # game loop
 while True:
@@ -94,6 +121,7 @@ while True:
         round_health.append(health)
         round_mana.append(mana)
     my_round_mana = round_mana[0]
+
     entity_count = int(input())  # Amount of heros and monsters you can see
     l_monster = []
     l_hero = []
@@ -130,38 +158,53 @@ while True:
     for i in l_oppo_hero:
         print("o" + str(i.id) + " " + str(i.x) + " " + str(i.y), file=sys.stderr, flush=True)
 
-    # sort heros by distance to the base
+    # sort heros by distance to the base, the closest two will defence, the fastest one will offensive
     l_hero_sort = []
     for i in range(heroes_per_player):
         l_hero[i].reset_target()
         l_hero[i].set_base_distance(base_x, base_y)        
     l_hero_sort = sorted(l_hero, key=lambda hero: hero.base_distance)
 
+    l_hero_sort[0].defence = True
+    l_hero_sort[1].defence = True
+    l_hero_sort[2].defence = False
+
     for i in range(heroes_per_player):
         curr_hero = l_hero_sort[i]
         print("Decision order: {}, curr ({}, {}), base ({}, {}), dis {}".format(
             curr_hero.id, curr_hero.x, curr_hero.y, base_x, base_y, curr_hero.base_distance), file=sys.stderr, flush=True)
+
+        # Depend on def/off, set patrol target
+        curr_hero.set_patrol_target()
+
         # First check if hero should spell wind:
         if curr_hero.spell_check(l_monster, my_round_mana):
             my_round_mana -= 10
             # print("Mana left: " + str(my_round_mana), file=sys.stderr, flush=True)
 
-        if curr_hero.wind_spell:
+        if curr_hero.wind_spell or curr_hero.control_spell:
             pass #
         else:
+            # If no spell, target order:
+            # 1. closest threat (and the threat hasn't been targeted)
+            # 2. other threat
+            # 3. patrol target
             current_targets.append(curr_hero.find_closest(threat_m, current_targets))
-            # Write an action using print        
+
             if curr_hero.target_x is None:
                 curr_hero.find_chosest_threat(threat_m)
+
             
     for h in l_hero:   
         print("Command order: " + str(h.id), file=sys.stderr, flush=True) 
         if h.wind_spell:
-            print("SPELL WIND " + str(enemy_x) + " " + str(enemy_y))
+            print("SPELL WIND {} {}".format(enemy_x, enemy_y))
+        elif h.control_spell:
+            print("SPELL CONTROL {} {} {}".format(h.control_spell, enemy_x, enemy_y) )
         elif h.target_x:
             print("MOVE " + str(h.target_x) + " "+ str(h.target_y))
         else:
-            print("MOVE " + str(base_x) + " " + str(base_y))
+            print("MOVE " + str(h.patrol_x) + " " + str(h.patrol_y))
             
 
         # In the first league: MOVE <x> <y> | WAIT; In later leagues: | SPELL <spellParams>;
