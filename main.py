@@ -132,8 +132,8 @@ class hero():
                 self.patrol_x = base_x + 6000 if base_x == 0 else base_x - 6000
                 self.patrol_y = base_y + 2200 if base_y == 0 else base_y - 2200
         else:
-            self.patrol_x = enemy_x + 6000 if enemy_x == 0 else enemy_x - 6000
-            self.patrol_y = enemy_y + 6000 if enemy_y == 0 else enemy_y - 6000
+            self.patrol_x = enemy_x + 8800 if enemy_x == 0 else enemy_x - 8800
+            self.patrol_y = enemy_y + 4500 if enemy_y == 0 else enemy_y - 4500
 
 # game loop
 while True:
