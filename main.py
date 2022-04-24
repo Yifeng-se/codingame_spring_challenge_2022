@@ -20,14 +20,15 @@ current_targets = []
 threat_m = []
 
 class monster():    
-    def __init__(self, id, x, y, health, vx, vy, nearBase, threatFor):
+    def __init__(self, id, x, y, health, shields, vx, vy, nearBase, threatFor):
         self.id = id
         self.x = x
         self.y = y
-        self.health=health, 
-        self.vx=vx, 
-        self.vy=vy, 
-        self.nearBase=nearBase, 
+        self.health=health
+        self.shld_lf=shields
+        self.vx=vx
+        self.vy=vy
+        self.nearBase=nearBase
         self.threatFor=threatFor
 
 class hero():    
@@ -49,7 +50,7 @@ class hero():
 
     # Offensive care about its own patrol position, defensive care about Gate and its own patrol area
     def check_care_area(self, m):
-        return (pow(m.x - self.patrol_x, 2) + pow(m.y - self.patrol_y, 2) < pow(2200, 2))
+        return (pow(m.x - self.patrol_x, 2) + pow(m.y - self.patrol_y, 2) < pow(2200, 2)) \
                 or (self.defence and pow(m.x - base_x, 2) + pow(m.y - base_y, 2) < pow(6000, 2))
 
     def find_closest(self, oppos, current_targets):
@@ -80,13 +81,17 @@ class hero():
 
     def find_closest_patrol(self, l_m):
         min_dis = 0
+        target_id = None
         for t in l_m:
+            if t.threatFor == 2:
+                continue
             d = pow(self.patrol_x - t.x, 2) + pow(self.patrol_y - t.y, 2)
             if self.target_x is None or d <= min_dis:
                 self.target_x = t.x
                 self.target_y = t.y
                 min_dis = d
-        print("find closest patrol: " + str(self.target_x) + " " + str(self.target_y), file=sys.stderr, flush=True)
+                target_id = t.id
+        print("find closest patrol: {} {} {}".format(target_id, self.target_x, self.target_y), file=sys.stderr, flush=True)
     
     def spell_check(self, l_monster, curr_mana):
         # How many monster around me?
@@ -95,17 +100,20 @@ class hero():
         lControlCnt = []
 
         for m in l_monster:
-            if self.get_distance(m) < pow(1280, 2):
+            if not m.shld_lf and self.get_distance(m) < pow(1280, 2):
                 iWindCnt += 1
-            if self.get_distance(m) < pow(2200, 2):
+            if not m.shld_lf and self.get_distance(m) < pow(2200, 2):
                 lControlCnt.append(m)
 
         if iWindCnt > 1 and curr_mana > 10:
             self.wind_spell = True
         elif len(lControlCnt) > 0 and curr_mana > 10:
-            self.control_spell = str(lControlCnt[0].id)
+            if lControlCnt[0].threatFor == 2 and not self.defence:
+                self.shield_spell = str(lControlCnt[0].id)
+            else:
+                self.control_spell = str(lControlCnt[0].id)
 
-        return self.wind_spell or self.control_spell
+        return self.wind_spell or self.control_spell or self.shield_spell
 
     def set_base_distance(self, base_x, base_y):
         self.base_distance = pow(self.x-base_x, 2) + pow(self.y-base_y, 2)
@@ -155,7 +163,7 @@ while True:
         # threat_for: Given this monster's trajectory, is it a threat to 1=your base, 2=your opponent's base, 0=neither
         _id, _type, x, y, shield_life, is_controlled, health, vx, vy, near_base, threat_for = [int(j) for j in input().split()]
         if _type == 0:
-            m = monster(id=_id, x=x, y=y, health=health, vx=vx, vy=vy, nearBase=near_base, threatFor=threat_for)
+            m = monster(id=_id, x=x, y=y, health=health, shields=shield_life, vx=vx, vy=vy, nearBase=near_base, threatFor=threat_for)
             l_monster.append(m)
         elif _type == 1:
             h = hero(id=_id, x=x, y=y)
@@ -214,6 +222,8 @@ while True:
         print("Command order: " + str(h.id), file=sys.stderr, flush=True) 
         if h.wind_spell:
             print("SPELL WIND {} {}".format(enemy_x, enemy_y))
+        elif h.shield_spell:
+            print("SPELL SHIELD {}".format(h.shield_spell))
         elif h.control_spell:
             print("SPELL CONTROL {} {} {}".format(h.control_spell, enemy_x, enemy_y) )
         elif h.target_x:
