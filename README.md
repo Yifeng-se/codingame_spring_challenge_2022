@@ -1,0 +1,1 @@
+# codingame_spring_challenge_2022
