@@ -35,16 +35,22 @@ class hero():
         self.id = id
         self.x = x
         self.y = y
-        self.defence = True
+        self.defence = (id % 3) in (1, 2)
     
     def reset_target(self):
         self.target_x = None
         self.target_y = None
         self.wind_spell = None
         self.control_spell = None
+        self.shield_spell = None
 
     def get_distance(self, oppo):
         return pow(self.x-oppo.x, 2) + pow(self.y-oppo.y, 2)
+
+    # Offensive care about its own patrol position, defensive care about Gate and its own patrol area
+    def check_care_area(self, m):
+        return (pow(m.x - self.patrol_x, 2) + pow(m.y - self.patrol_y, 2) < pow(2200, 2))
+                or (self.defence and pow(m.x - base_x, 2) + pow(m.y - base_y, 2) < pow(6000, 2))
 
     def find_closest(self, oppos, current_targets):
         target_id = None
@@ -53,23 +59,34 @@ class hero():
             if o.id in current_targets:
                 continue
             d = self.get_distance(o)
-            if self.target_x is None or d < min_dis:
+            if self.check_care_area(o) and (self.target_x is None or d < min_dis):
                 self.target_x = o.x
                 self.target_y = o.y
                 min_dis = d
                 target_id = o.id
+        print("find target: " + str(self.target_x) + " " + str(self.target_y), file=sys.stderr, flush=True)
         return target_id
 
-    def find_chosest_threat(self, threats):
-        print("find threat", file=sys.stderr, flush=True)
+    def find_closest_threat(self, threats):
+        # print("find threat", file=sys.stderr, flush=True)
         min_dis = 0
         for t in threats:
             d = pow(t.x, 2) + pow(t.y, 2)
+            if self.check_care_area(t) and (self.target_x is None or d <= min_dis):
+                self.target_x = t.x
+                self.target_y = t.y
+                min_dis = d
+        print("find threat: " + str(self.target_x) + " " + str(self.target_y), file=sys.stderr, flush=True)
+
+    def find_closest_patrol(self, l_m):
+        min_dis = 0
+        for t in l_m:
+            d = pow(self.patrol_x - t.x, 2) + pow(self.patrol_y - t.y, 2)
             if self.target_x is None or d <= min_dis:
                 self.target_x = t.x
                 self.target_y = t.y
                 min_dis = d
-        print(str(self.target_x) + " " + str(self.target_y), file=sys.stderr, flush=True)
+        print("find closest patrol: " + str(self.target_x) + " " + str(self.target_y), file=sys.stderr, flush=True)
     
     def spell_check(self, l_monster, curr_mana):
         # How many monster around me?
@@ -98,17 +115,17 @@ class hero():
 
         if self.defence:
             if self.id % 3 == 0:
-                self.patrol_x = base_x + 2200 if base_x == 0 else base_x - 2200
+                self.patrol_x = base_x + 6000 if base_x == 0 else base_x - 6000
                 self.patrol_y = base_y + 6000 if base_y == 0 else base_y - 6000
             elif self.id % 3 == 1:
-                self.patrol_x = base_x + 6000 if base_x == 0 else base_x - 6000
+                self.patrol_x = base_x + 2200 if base_x == 0 else base_x - 2200
                 self.patrol_y = base_y + 6000 if base_y == 0 else base_y - 6000
             elif self.id % 3 == 2:
                 self.patrol_x = base_x + 6000 if base_x == 0 else base_x - 6000
                 self.patrol_y = base_y + 2200 if base_y == 0 else base_y - 2200
         else:
-            self.patrol_x = enemy_x
-            self.patrol_y = enemy_y
+            self.patrol_x = enemy_x + 4000 if enemy_x == 0 else enemy_x - 4000
+            self.patrol_y = enemy_y + 4000 if enemy_y == 0 else enemy_y - 4000
 
 # game loop
 while True:
@@ -165,10 +182,6 @@ while True:
         l_hero[i].set_base_distance(base_x, base_y)        
     l_hero_sort = sorted(l_hero, key=lambda hero: hero.base_distance)
 
-    l_hero_sort[0].defence = True
-    l_hero_sort[1].defence = True
-    l_hero_sort[2].defence = False
-
     for i in range(heroes_per_player):
         curr_hero = l_hero_sort[i]
         print("Decision order: {}, curr ({}, {}), base ({}, {}), dis {}".format(
@@ -187,12 +200,14 @@ while True:
         else:
             # If no spell, target order:
             # 1. closest threat (and the threat hasn't been targeted)
-            # 2. other threat
-            # 3. patrol target
             current_targets.append(curr_hero.find_closest(threat_m, current_targets))
-
+            # 2. other threat
             if curr_hero.target_x is None:
-                curr_hero.find_chosest_threat(threat_m)
+                curr_hero.find_closest_threat(threat_m)
+            # 3. No threat, go to any monster close to patrol point
+            if curr_hero.target_x is None:
+                curr_hero.find_closest_patrol(l_monster)
+            # 99. No target, it will go to patrol point
 
             
     for h in l_hero:   
@@ -202,10 +217,6 @@ while True:
         elif h.control_spell:
             print("SPELL CONTROL {} {} {}".format(h.control_spell, enemy_x, enemy_y) )
         elif h.target_x:
-            print("MOVE " + str(h.target_x) + " "+ str(h.target_y))
+            print("MOVE {} {} ".format(h.target_x, h.target_y))
         else:
-            print("MOVE " + str(h.patrol_x) + " " + str(h.patrol_y))
-            
-
-        # In the first league: MOVE <x> <y> | WAIT; In later leagues: | SPELL <spellParams>;
-        #print("WAIT")
+            print("MOVE {} {} ".format(h.patrol_x, h.patrol_y))
