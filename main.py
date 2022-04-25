@@ -104,7 +104,7 @@ class hero():
             # It is a threat target, what should I do?
             # If I'm goal keeper, and the target is within any spell, I should use spell
             if self.role[0] == 'G' and curr_mana >= 10:
-                if self.get_distance(self.target) < pow(1280, 2):
+                if not self.target.shld_lf and self.get_distance(self.target) < pow(1280, 2):
                     self.wind_spell = True
                 elif not self.target.shld_lf and self.get_distance(self.target) < pow(2200, 2) and self.target.threatFor != 2:
                     self.control_spell = str(self.target.id)
@@ -114,14 +114,14 @@ class hero():
                 the_turns_it_will_reach_base = math.trunc((math.sqrt(self.get_distance_ab(self.target, self.base)) - 300) / 400)
                 if the_turns_i_need_to_kill_it > the_turns_it_will_reach_base:
                     # I cannot kill the monster in time, I should use spell
-                    if self.get_distance(self.target) < pow(1280, 2):
+                    if not self.target.shld_lf and self.get_distance(self.target) < pow(1280, 2):
                         self.wind_spell = True
                     if not self.target.shld_lf and self.get_distance(self.target) < pow(2200, 2) and self.target.threatFor != 2:
                         self.control_spell = str(self.target.id)
         if self.target and self.find_solution[1] == 'O':
             # how close is my target to enemy_base?
             if self.get_distance_ab(self.target, self.enemy_base) < pow(7800, 2):
-                if self.get_distance(self.target) < pow(1280, 2):
+                if not self.target.shld_lf and self.get_distance(self.target) < pow(1280, 2):
                     self.wind_spell = True
                 if not self.target.shld_lf and self.get_distance(self.target) < pow(2200, 2) and self.target.threatFor != 2:
                     self.control_spell = str(self.target.id)
