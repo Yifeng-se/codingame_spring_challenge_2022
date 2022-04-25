@@ -137,6 +137,20 @@ class hero():
             if iWindCnt > 4 and curr_mana > 50:
                 self.wind_spell = True
 
+        if not self.wind_spell and not self.control_spell and not self.shield_spell and curr_mana > 200:
+            for m in l_monster:
+                if not m.shld_lf and self.get_distance(m) < pow(2200, 2) and m.threatFor != 2:
+                    lControlCnt.append(m)
+                if not m.shld_lf and self.get_distance(m) < pow(2200, 2) and m.threatFor == 2:
+                    lShieldCnt.append(m)
+
+            if iWindCnt > 1:
+                self.wind_spell = True
+            elif len(lControlCnt) > 0:
+                self.control_spell = str(lControlCnt[0].id)
+            elif len(lShieldCnt) > 0:
+                self.shield_spell = str(lShieldCnt[0].id)
+
         return self.wind_spell or self.control_spell or self.shield_spell
 
     def set_patrol_target(self):
