@@ -30,34 +30,35 @@ class base():
         self.stratigic = 'O'
 
     def get_distance(self, o):
-        return pow(self.x-o.x, 2) + pow(self.y-o.y, 2)
+        return math.sqrt(pow(self.x-o.x, 2) + pow(self.y-o.y, 2))
 
     def is_risky(self, o):
-        return self.get_distance(o) < pow(5000, 2)
+        return self.get_distance(o) < 5000
 
 
 class monster():    
-    def __init__(self, id, x, y, health, shields, vx, vy, nearBase, threatFor):
+    def __init__(self, id, x, y, health, shields, is_controlled, vx, vy, nearBase, threatFor):
         self.id = id
         self.x = x
         self.y = y
         self.health=health
         self.shld_lf=shields
+        self.is_controlled = is_controlled
         self.vx=vx
         self.vy=vy
         self.nearBase=nearBase
         self.threatFor=threatFor
 
-class hero():    
+class hero():
     def __init__(self, id, x, y, base, enemy_base):
         self.id = id
         self.x = x
         self.y = y
         self.defence = (id % 3) in (1, 2)
         self.base = base
-        self.base_distance = pow(self.x-base.x, 2) + pow(self.y-base.y, 2)
+        self.base_distance = math.sqrt(pow(self.x-base.x, 2) + pow(self.y-base.y, 2))
         self.enemy_base = enemy_base
-    
+
     def reset_target(self):
         self.target = None
         self.wind_spell = None
@@ -66,14 +67,15 @@ class hero():
         self.find_solution = None
 
     def get_distance_ab(self, a, b):
-        return pow(a.x-b.x, 2) + pow(a.y-b.y, 2)
+        return math.sqrt(pow(a.x-b.x, 2) + pow(a.y-b.y, 2))
 
     def get_distance(self, oppo):
         return self.get_distance_ab(self, oppo)
 
     # Offensive care about its own patrol position, defensive care about Gate and its own patrol area
     def check_care_area(self, m):
-        return (pow(m.x - self.patrol_x, 2) + pow(m.y - self.patrol_y, 2) < pow(2200, 2)) \
+        return self.role == 'O' \
+                or (pow(m.x - self.patrol_x, 2) + pow(m.y - self.patrol_y, 2) < pow(3300, 2)) \
                 or (self.role != 'O' and pow(m.x - base_x, 2) + pow(m.y - base_y, 2) < pow(6000, 2))
 
     def find_closest(self, start_point, oppos, current_targets):
@@ -104,45 +106,47 @@ class hero():
             # It is a threat target, what should I do?
             # If I'm goal keeper, and the target is within any spell, I should use spell
             if self.role[0] == 'G' and curr_mana >= 10:
-                if not self.target.shld_lf and self.get_distance(self.target) < pow(1280, 2):
+                if not self.target.shld_lf and self.get_distance(self.target) < 1280:
                     self.wind_spell = True
-                elif not self.target.shld_lf and self.get_distance(self.target) < pow(2200, 2) and self.target.threatFor != 2:
+                elif not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.threatFor != 2:
                     self.control_spell = str(self.target.id)
             if self.role[0] == 'D' and curr_mana >= 10:
                 # Can I kill target before it reach base?
                 the_turns_i_need_to_kill_it = round(self.target.health / 2)
-                the_turns_it_will_reach_base = math.trunc((math.sqrt(self.get_distance_ab(self.target, self.base)) - 300) / 400)
+                the_turns_it_will_reach_base = math.trunc((self.get_distance_ab(self.target, self.base) - 300) / 400)
                 if the_turns_i_need_to_kill_it > the_turns_it_will_reach_base:
                     # I cannot kill the monster in time, I should use spell
-                    if not self.target.shld_lf and self.get_distance(self.target) < pow(1280, 2):
+                    if not self.target.shld_lf and self.get_distance(self.target) < 1280:
                         self.wind_spell = True
-                    if not self.target.shld_lf and self.get_distance(self.target) < pow(2200, 2) and self.target.threatFor != 2:
+                    if (not self.target.shld_lf and self.get_distance(self.target) < 2200
+                        and not self.target.is_controlled
+                        and self.target.threatFor != 2):
                         self.control_spell = str(self.target.id)
         if self.target and self.find_solution[1] == 'O':
             # how close is my target to enemy_base?
-            if self.get_distance_ab(self.target, self.enemy_base) < pow(7800, 2):
-                if not self.target.shld_lf and self.get_distance(self.target) < pow(1280, 2):
+            if self.get_distance_ab(self.target, self.enemy_base) < 7800:
+                if not self.target.shld_lf and self.get_distance(self.target) < 1280:
                     self.wind_spell = True
-                if not self.target.shld_lf and self.get_distance(self.target) < pow(2200, 2) and self.target.threatFor != 2:
+                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.threatFor != 2:
                     self.control_spell = str(self.target.id)
-                if not self.target.shld_lf and self.get_distance(self.target) < pow(2200, 2) and self.target.threatFor == 2:
+                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.threatFor == 2:
                     self.shield_spell = str(self.target.id)
 
         if not self.wind_spell and not self.control_spell and not self.shield_spell:
             # no threat target, no shooting, how many monster around me?
             for m in l_monster:
-                if not m.shld_lf and self.get_distance(m) < pow(1280, 2):
+                if not m.shld_lf and self.get_distance(m) < 1280:
                     iWindCnt += 1
 
             if iWindCnt > 4 and curr_mana > 50:
                 self.wind_spell = True
 
         if not self.wind_spell and not self.control_spell and not self.shield_spell and curr_mana > 200:
-            for m in l_monster:
-                if not m.shld_lf and self.get_distance(m) < pow(2200, 2) and m.threatFor != 2:
-                    lControlCnt.append(m)
-                if not m.shld_lf and self.get_distance(m) < pow(2200, 2) and m.threatFor == 2:
-                    lShieldCnt.append(m)
+            #for m in l_monster:
+            #    if not m.shld_lf and self.get_distance(m) < pow(2200, 2) and m.threatFor != 2:
+            #        lControlCnt.append(m)
+            #    if not m.shld_lf and self.get_distance(m) < pow(2200, 2) and m.threatFor == 2:
+            #        lShieldCnt.append(m)
 
             if iWindCnt > 1:
                 self.wind_spell = True
@@ -153,21 +157,37 @@ class hero():
 
         return self.wind_spell or self.control_spell or self.shield_spell
 
-    def set_patrol_target(self):
+    def set_patrol_target(self, curr_targets):
         global base_x, base_y, enemy_x, enemy_y
-
+        class patrol():
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+        P0 = patrol(base_x + 2200 if base_x == 0 else base_x - 2200, base_y + 6000 if base_y == 0 else base_y - 6000)
+        P1 = patrol(base_x + 6000 if base_x == 0 else base_x - 6000, base_y + 2200 if base_y == 0 else base_y - 2200)
+        result = None
         if self.role == 'G':
             self.patrol_x = base_x + 800 if base_x == 0 else base_x - 800
             self.patrol_y = base_y + 800 if base_y == 0 else base_y - 800
-        elif self.role == 'D0':
-            self.patrol_x = base_x + 2200 if base_x == 0 else base_x - 2200
-            self.patrol_y = base_y + 6000 if base_y == 0 else base_y - 6000
-        elif self.role == 'D1':
-            self.patrol_x = base_x + 6000 if base_x == 0 else base_x - 6000
-            self.patrol_y = base_y + 2200 if base_y == 0 else base_y - 2200
+            result = 'G'
+        elif self.role[0] == 'D':
+            if self.get_distance(P0) < self.get_distance(P1) and 'P0' not in curr_targets:
+                self.patrol_x = P0.x
+                self.patrol_y = P0.y
+                #if self.get_distance(P0) < 200:
+                #    self.patrol_x = base_x
+                result = 'P0'
+            else:
+                self.patrol_x = P1.x
+                self.patrol_y = P1.y
+                #if self.get_distance(P1) < 200:
+                #    self.patrol_y = base_y
+                result = 'P1'
         else: # role == 'O'
             self.patrol_x = enemy_x + 8800 if enemy_x == 0 else enemy_x - 8800
             self.patrol_y = enemy_y + 4500 if enemy_y == 0 else enemy_y - 4500
+            result = 'O'
+        return result
 
     def find_target(self, goal_threat_m, threat_m, l_monster, current_targets, enemy_base):
         if self.role[0] == 'G':
@@ -177,7 +197,7 @@ class hero():
                 self.find_solution = 'GT'
         elif self.role[0] == 'D':
             # defense
-            if self.base.mana < 20:
+            if self.role == 'D0' or self.base.mana < 20:
                 #can only use one spell, so find goal_threat
                 self.find_closest(self.base, goal_threat_m, current_targets)
             if self.target:
@@ -239,21 +259,23 @@ while True:
         # threat_for: Given this monster's trajectory, is it a threat to 1=your base, 2=your opponent's base, 0=neither
         _id, _type, x, y, shield_life, is_controlled, health, vx, vy, near_base, threat_for = [int(j) for j in input().split()]
         if _type == 0:
-            m = monster(id=_id, x=x, y=y, health=health, shields=shield_life, vx=vx, vy=vy, nearBase=near_base, threatFor=threat_for)
+            m = monster(id=_id, x=x, y=y, health=health, shields=shield_life, is_controlled=is_controlled, vx=vx, vy=vy, nearBase=near_base, threatFor=threat_for)
             l_monster.append(m)
         elif _type == 1:
             h = hero(id=_id, x=x, y=y, base=my_base, enemy_base=enemy_base)
-            l_hero.append(h)    
+            l_hero.append(h)
         elif _type == 2:
             h = hero(id=_id, x=x, y=y, base=enemy_base, enemy_base=my_base)
-            l_oppo_hero.append(h)  
+            l_oppo_hero.append(h)
 
     current_targets.clear()
     threat_m.clear()
     goal_threat_m.clear()
 
     for i in l_monster:
-        # print("m{} ({},{}) => ({},{})".format(i.id, i.x,i.y, i.vx, i.vy), file=sys.stderr, flush=True)
+        #
+        if i.id == 44:
+            print("m{} ({},{}) => ({},{}), {}, {}".format(i.id, i.x,i.y, i.vx, i.vy, i.nearBase, i.threatFor), file=sys.stderr, flush=True)
         if i.threatFor == 1:
             threat_m.append(i)
             if my_base.is_risky(i):
@@ -273,6 +295,7 @@ while True:
         l_hero[i].reset_target()
     l_hero_sort = sorted(l_hero, key=lambda hero: hero.base_distance)
 
+    # If base stratigic is Defense, one Goal_keeper, 2 defenser; otherwise 2 defenser, 1 forward (O)
     for i in range(heroes_per_player):
         curr_hero = l_hero_sort[i]
         if my_base.stratigic == 'D':
@@ -292,12 +315,12 @@ while True:
             curr_hero.id, curr_hero.x, curr_hero.y, base_x, base_y, curr_hero.base_distance, my_base.stratigic, curr_hero.role), file=sys.stderr, flush=True)
 
         # Depend on role, set patrol target
-        curr_hero.set_patrol_target()
+        current_targets.append(curr_hero.set_patrol_target(current_targets))
 
         # find monster target
         current_targets.append(curr_hero.find_target(goal_threat_m, threat_m, l_monster, current_targets, enemy_base))
 
-        # First check if hero should spell wind:
+        # should I use spell or should I just farming
         if curr_hero.spell_check(l_monster, my_base.mana):
             my_base.mana -= 10
             
