@@ -25,29 +25,49 @@ class Point():
 def get_distance_ab(a, b):
     return math.sqrt(pow(a.x-b.x, 2) + pow(a.y-b.y, 2))
 
+class Patrol():
+    def __init__(self, id, x, y):
+        self.id = id
+        self.x = x
+        self.y = y
+    def go_next(self, p):
+        self.next = p
+
 class Base():
     def __init__(self, x, y, health, mana):
         self.x = x
         self.y = y
         self.health = health
         self.mana = mana
-        self.stratigic = 'O'
+        self.stratigic = 'D'
+        self.stratigic_change = False
         self.l_monster = []
         self.current_targets = []
         self.threat_m = []
         self.goal_threat_m = []
         self.heroes = {}
-        d_p_0 = Point(x + 2200 if x == 0 else x - 2200,
+        
+        # Defense patrol route
+        self.bp = Patrol('base', x + 800 if x == 0 else x - 800, y + 800 if y == 0 else y - 800)
+        self.dp0 = Patrol('dp0', x + 2200 if x == 0 else x - 2200,
                     y + 6000 if y == 0 else y - 6000)
-        d_p_1 = Point(x + 6000 if x == 0 else x - 6000,
+        self.dp1 = Patrol('dp1', x + 6000 if x == 0 else x - 6000,
                     y + 2200 if y == 0 else y - 2200)
-        d_p_2 = Point(8800, 4500)
-        self.l_d_patrol = [d_p_0, d_p_1, d_p_2]
-        f_p_0 = Point(13500 if x == 0 else x - 13500,
+        self.dp2 = Patrol('dp2', 8800, 4500)
+        self.dp0.go_next(self.dp1)
+        self.dp1.go_next(self.dp2)
+        self.dp2.go_next(self.dp0)
+        self.l_d_patrol = [self.dp0, self.dp1, self.dp2]
+
+        # Offense patrol route
+        self.fp0 = Patrol('fp0', 13500 if x == 0 else x - 13500,
                     5200 if y == 0 else y - 5200)
-        f_p_1 = Point(10600, 2200)
-        f_p_2 = Point(7000, 6800)
-        self.l_f_patrol = [f_p_0, f_p_1, f_p_2]
+        self.fp1 = Patrol('fp1', 10600, 2200)
+        self.fp2 = Patrol('fp2', 7000, 6800)
+        self.fp0.go_next(self.fp1)
+        self.fp1.go_next(self.fp2)
+        self.fp2.go_next(self.fp0)
+        self.l_f_patrol = [self.fp0, self.fp1, self.fp2]
 
     def get_distance(self, o):
         return get_distance_ab(self, o)
@@ -91,7 +111,13 @@ class Hero():
         self.is_controlled = isControlled
         self.role = 'D'
         
-
+    def round_set(self, x, y, shieldLife, isControlled):
+        self.x = x
+        self.y = y
+        self.base_distance = get_distance_ab(self, self.base)
+        self.shield_life = shieldLife
+        self.is_controlled = isControlled
+    
     def reset_target(self):
         self.target = None
         self.wind_spell = None
@@ -105,8 +131,9 @@ class Hero():
     # Offensive care about its own patrol position, defensive care about Gate and its own patrol area
     def check_care_area(self, m):
         return self.role == 'O' \
-            or (pow(m.x - self.patrol_x, 2) + pow(m.y - self.patrol_y, 2) < pow(3300, 2)) \
-            or (self.role != 'O' and pow(m.x - base_x, 2) + pow(m.y - base_y, 2) < pow(6000, 2))
+            or (self.role != 'O' and get_distance_ab(m, self.base) < 8000)
+            #or get_distance_ab(m, self.patrol) < 3300 \
+            
 
     def find_closest(self, start_point, oppos, current_targets):
         target_id = None
@@ -116,7 +143,7 @@ class Hero():
                 continue
             if hasattr(o, 'id') and o.id in current_targets:
                 continue
-            d = self.get_distance_ab(start_point, o)
+            d = get_distance_ab(start_point, o)
             if self.check_care_area(o) and (self.target is None or d < min_dis):
                 self.target = o
                 min_dis = d
@@ -145,7 +172,7 @@ class Hero():
                 # Can I kill target before it reach base?
                 the_turns_i_need_to_kill_it = round(self.target.health / 2)
                 the_turns_it_will_reach_base = math.trunc(
-                    (self.get_distance_ab(self.target, self.base) - 300) / 400)
+                    (get_distance_ab(self.target, self.base) - 300) / 400)
                 if the_turns_i_need_to_kill_it > the_turns_it_will_reach_base:
                     # I cannot kill the monster in time, I should use spell
                     if not self.target.shld_lf and self.get_distance(self.target) < 1280:
@@ -156,7 +183,7 @@ class Hero():
                         self.control_spell = str(self.target.id)
         if self.target and self.find_solution[1] == 'O':
             # how close is my target to enemy_base?
-            if self.get_distance_ab(self.target, self.enemy_base) < 7800:
+            if get_distance_ab(self.target, self.enemy_base) < 7800:
                 if not self.target.shld_lf and self.get_distance(self.target) < 1280:
                     self.wind_spell = True
                 if not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.threatFor != 2:
@@ -190,29 +217,18 @@ class Hero():
         return self.wind_spell or self.control_spell or self.shield_spell
 
     def set_patrol_target(self, curr_targets):
-        result = None
+        # Only need to do it when change stratigic
         if self.role == 'G':
-            self.patrol_x = base_x + 800 if base_x == 0 else base_x - 800
-            self.patrol_y = base_y + 800 if base_y == 0 else base_y - 800
-            result = 'G'
+            self.patrol = self.base.bp
         elif self.role[0] == 'D':
-            if self.get_distance(P0) < self.get_distance(P1) and 'P0' not in curr_targets:
-                self.patrol_x = P0.x
-                self.patrol_y = P0.y
-                # if self.get_distance(P0) < 200:
-                #    self.patrol_x = base_x
-                result = 'P0'
+            if self.get_distance(self.base.dp0) < self.get_distance(self.base.dp1) and self.base.dp0.id not in curr_targets:
+                self.patrol = self.base.dp0
             else:
-                self.patrol_x = P1.x
-                self.patrol_y = P1.y
-                # if self.get_distance(P1) < 200:
-                #    self.patrol_y = base_y
-                result = 'P1'
+                self.patrol = self.base.dp1                
         else:  # role == 'O'
-            self.patrol_x = enemy_x + 8800 if enemy_x == 0 else enemy_x - 8800
-            self.patrol_y = enemy_y + 4500 if enemy_y == 0 else enemy_y - 4500
-            result = 'O'
-        return result
+            self.patrol = self.base.fp0
+
+        return self.patrol.id if self.patrol else None
 
     def find_target(self, goal_threat_m, threat_m, l_monster, current_targets, enemy_base):
         if self.role[0] == 'G':
@@ -256,6 +272,7 @@ class Hero():
 
 # game loop
 while True:
+    l_heroes = []
     my_base.round_reset()
     enemy_base.round_reset()
 
@@ -289,11 +306,18 @@ while True:
                         is_controlled=is_controlled, vx=vx, vy=vy, nearBase=near_base, threatFor=threat_for)
             my_base.l_monster.append(m)
         elif _type == 1:
-            h = Hero(id=_id, x=x, y=y, shieldLife=shield_life, isControlled=is_controlled, base=my_base, enemy_base=enemy_base)
-            my_base.heroes[id] = h
+            if id not in my_base.heroes:
+                h = Hero(id=_id, x=x, y=y, shieldLife=shield_life, isControlled=is_controlled, base=my_base, enemy_base=enemy_base)
+                my_base.heroes[id] = h
+            else:
+                my_base.heroes[id].round_set(x=x, y=y, shieldLife=shield_life, isControlled=is_controlled)
+            l_heroes.append(my_base.heroes[id])
         elif _type == 2:
-            h = Hero(id=_id, x=x, y=y, shieldLife=shield_life, isControlled=is_controlled, base=enemy_base, enemy_base=my_base)
-            enemy_base.heroes[id] = h
+            if id not in enemy_base.heroes:
+                h = Hero(id=_id, x=x, y=y, shieldLife=shield_life, isControlled=is_controlled, base=enemy_base, enemy_base=my_base)
+                enemy_base.heroes[id] = h
+            else:
+                enemy_base.heroes[id].round_set(x=x, y=y, shieldLife=shield_life, isControlled=is_controlled)
 
     for i in my_base.l_monster:
         # print("m{} ({},{}) => ({},{}), {}, {}".format(i.id, i.x, i.y, i.vx, i.vy, i.nearBase, i.threatFor), file=sys.stderr, flush=True)
@@ -302,22 +326,29 @@ while True:
             if my_base.is_risky(i):
                 my_base.goal_threat_m.append(i)
 
-    if len(my_base.goal_threat_m) >= 3:
-        my_base.stratigic = 'D'
-    else:
-        my_base.stratigic = 'O'
-
-    for k, v in enemy_base.heroes:
-        print("o{} ({}, {})".format(k, v.x, v.y), file=sys.stderr, flush=True)
-
-    # sort heros by distance to the base, the closest two will defence, the fastest one will offensive
+    # sort heros by distance to the base
     l_hero_sort = []
     for k, v in my_base.heroes:
         v.reset_target()
         l_hero_sort.append(v)
     l_hero_sort = sorted(l_hero_sort, key=lambda hero: hero.base_distance)
 
-    # If base stratigic is Defense, one Goal_keeper, 2 defenser; otherwise 2 defenser, 1 forward (O)
+    if len(my_base.goal_threat_m) >= 3:
+        if my_base.stratigic == 'O':
+            # Change stratigic, need to reset patrol for heroes
+            my_base.stratigic = 'D'
+            my_base.stratigic_change = True
+        else:
+            my_base.stratigic_change = False
+    else:
+        if my_base.stratigic == 'D':
+            my_base.stratigic = 'O'
+            my_base.stratigic_change = True
+        else:
+            my_base.stratigic_change = False
+
+    # Depense on hero base_distance and base stratigic, set role
+    # Defense, one Goal_keeper, 2 defenser; otherwise 2 defenser, 1 forward (O)
     for i in range(heroes_per_player):
         curr_hero = l_hero_sort[i]
         if my_base.stratigic == 'D':
@@ -331,34 +362,43 @@ while True:
             else:
                 curr_hero.role = 'D' + str(i)
 
+        if my_base.stratigic_change:
+            # Reset hero Patrol route
+            my_base.current_targets.append(curr_hero.set_patrol_target(my_base.current_targets))
+
+    for k, v in enemy_base.heroes:
+        print("o{} ({}, {})".format(k, v.x, v.y), file=sys.stderr, flush=True)
+
+
     for i in range(heroes_per_player):
         curr_hero = l_hero_sort[i]
         print("Decision order: {}, curr ({}, {}), base ({}, {}), dis {}, role {}-{}".format(
             curr_hero.id, curr_hero.x, curr_hero.y, curr_hero.base.x, curr_hero.base.y, curr_hero.base_distance, my_base.stratigic, curr_hero.role), file=sys.stderr, flush=True)
 
-        # Depend on role, set patrol target
-        my_base.current_targets.append(curr_hero.set_patrol_target(my_base.current_targets))
+        # If arrived patrol, go to next one
+        if curr_hero.get_distance(curr_hero.patrol) < 600 and hasattr(curr_hero.patrol, 'next'):
+            curr_hero.patrol = curr_hero.patrol.next
 
         # find monster target
-        current_targets.append(curr_hero.find_target(
-            goal_threat_m, threat_m, l_monster, current_targets, enemy_base))
+        my_base.current_targets.append(curr_hero.find_target(
+            my_base.goal_threat_m, my_base.threat_m, my_base.l_monster, my_base.current_targets, enemy_base))
 
         # should I use spell or should I just farming
-        if curr_hero.spell_check(l_monster, my_base.mana):
+        if curr_hero.spell_check(my_base.l_monster, my_base.mana):
             my_base.mana -= 10
 
-    for h in l_hero:
+    for h in l_heroes:
         # print("Command order: " + str(h.id), file=sys.stderr, flush=True)
         if h.wind_spell:
             print("SPELL WIND {} {} {}".format(
-                enemy_x, enemy_y, h.get_detail()))
+                h.target.x, h.target.y, h.get_detail()))
         elif h.shield_spell:
             print("SPELL SHIELD {} {}".format(h.shield_spell, h.get_detail()))
         elif h.control_spell:
             print("SPELL CONTROL {} {} {} {}".format(
-                h.control_spell, enemy_x, enemy_y, h.get_detail()))
+                h.control_spell, h.target.x, h.target.y, h.get_detail()))
         elif h.target:
             print("MOVE {} {} {}".format(h.target.x+h.target.vx,
                   h.target.y+h.target.vy, h.get_detail()))
         else:
-            print("MOVE {} {} {}".format(h.patrol_x, h.patrol_y, h.get_detail()))
+            print("MOVE {} {} {}".format(h.patrol.x, h.patrol.y, h.get_detail()))
