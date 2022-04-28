@@ -65,10 +65,15 @@ class Base():
         self.l_d_patrol = [self.dp0, self.dp1, self.dp2]
 
         # Offense patrol route
-        self.fp0 = Patrol('fp0', 13500 if x == 0 else x - 13500,
-                          5200 if y == 0 else y - 5200)
-        self.fp1 = Patrol('fp1', 10600, 2200)
-        self.fp2 = Patrol('fp2', 7000, 6800)
+        # self.fp0 = Patrol('fp0', 13500 if x == 0 else x - 13500,
+        #                   5200 if y == 0 else y - 5200)
+        # self.fp1 = Patrol('fp1', 10600, 2200)
+        # self.fp2 = Patrol('fp2', 7000, 6800)
+        self.fp0 = Patrol('fp0', enemy_x + 2200 if enemy_x == 0 else enemy_x - 2200,
+                          enemy_y + 6000 if enemy_y == 0 else enemy_y - 6000)
+        self.fp1 = Patrol('fp1', enemy_x + 6000 if enemy_x == 0 else enemy_x - 6000,
+                          enemy_y + 2200 if enemy_y == 0 else enemy_y - 2200)
+        self.fp2 = Patrol('fp2', 8800, 4500)
         self.fp0.go_next(self.fp1)
         self.fp1.go_next(self.fp2)
         self.fp2.go_next(self.fp0)
@@ -85,6 +90,9 @@ class Base():
         self.current_targets.clear()
         self.threat_m.clear()
         self.goal_threat_m.clear()
+
+    def mana_OO(self):
+        return self.mana >= 80
 
 
 my_base = Base(x=base_x, y=base_y, health=3, mana=0)
@@ -116,6 +124,8 @@ class Hero():
         self.shield_life = shieldLife
         self.is_controlled = isControlled
         self.role = 'D'
+        self.high_morale = 0
+        self.act_log = []
 
     def round_set(self, x, y, shieldLife, isControlled):
         self.x = x
@@ -144,7 +154,8 @@ class Hero():
         target_id = None
         min_dis = 0
         for o in oppos:
-            if hasattr(o, 'threatFor') and o.threatFor == 2:
+            if hasattr(o, 'threatFor') and o.threatFor == 2 \
+                and not self.high_morale:
                 continue
             if hasattr(o, 'id') and o.id in current_targets:
                 continue
@@ -187,12 +198,13 @@ class Hero():
         if self.target and self.find_solution[1] == 'O':
             # how close is my target to enemy_base?
             if get_distance_ab(self.target, self.enemy_base) < 7800:
-                if not self.target.shld_lf and self.get_distance(self.target) < 1280:
+                if not self.target.shld_lf and self.get_distance(self.target) < 1280 and self.target.id > 5:
                     self.wind_spell = True
-                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.threatFor != 2:
+                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and (self.target.id < 5 or self.target.id > 5 and self.target.threatFor != 2):
                     self.control_spell = str(self.target.id)
-                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.threatFor == 2:
+                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.id > 5 and self.target.threatFor == 2 and self.target.health >= 10:
                     self.shield_spell = str(self.target.id)
+
 
         if not self.wind_spell and not self.control_spell and not self.shield_spell:
             # no threat target, no shooting, how many monster around me?
@@ -204,7 +216,6 @@ class Hero():
                 self.wind_spell = True
 
         if not self.wind_spell and not self.control_spell and not self.shield_spell and curr_mana > 200:
-            print("WindCnt {}".format(iWindCnt), file=sys.stderr, flush=True)
             if iWindCnt > 1:
                 self.wind_spell = True
 
@@ -248,12 +259,14 @@ class Hero():
                     self.find_solution = 'DP'
         elif self.role[0] == 'O':
             # offense, if we don't have much mana, find closest one
-            if self.base.mana <= 80:
+            if not self.base.mana_OO() and not self.high_morale:
                 if self.find_closest(self, l_monster, current_targets):
                     self.find_solution = 'OP'
             else:
                 # find the closest one to enemy_base
                 if self.find_closest(enemy_base, l_monster, current_targets):
+                    self.find_solution = 'OO'
+                if self.find_closest(enemy_base, enemy_base.heroes.values(), current_targets):
                     self.find_solution = 'OO'
 
         return self.target.id if self.target else None
@@ -267,6 +280,7 @@ while True:
     l_heroes = []
     my_base.round_reset()
     enemy_base.round_reset()
+    enemy_base.heroes.clear()
 
     for i in range(2):
         # health: Each player's base health
@@ -307,16 +321,12 @@ while True:
                     x=x, y=y, shieldLife=shield_life, isControlled=is_controlled)
             l_heroes.append(my_base.heroes[_id])
         elif _type == 2:
-            if _id not in enemy_base.heroes:
-                h = Hero(id=_id, x=x, y=y, shieldLife=shield_life,
-                         isControlled=is_controlled, base=enemy_base, enemy_base=my_base)
-                enemy_base.heroes[_id] = h
-            else:
-                enemy_base.heroes[_id].round_set(
-                    x=x, y=y, shieldLife=shield_life, isControlled=is_controlled)
+            h = Hero(id=_id, x=x, y=y, shieldLife=shield_life,
+                        isControlled=is_controlled, base=enemy_base, enemy_base=my_base)
+            enemy_base.heroes[_id] = h
 
     for i in my_base.l_monster:
-        # print("m{} ({},{}) => ({},{}), {}, {}".format(i.id, i.x, i.y, i.vx, i.vy, i.nearBase, i.threatFor), file=sys.stderr, flush=True)
+        print("m{} ({},{}) => ({},{}), {}, {}".format(i.id, i.x, i.y, i.vx, i.vy, i.nearBase, i.threatFor), file=sys.stderr, flush=True)
         if i.threatFor == 1:
             my_base.threat_m.append(i)
             if my_base.is_risky(i):
@@ -368,6 +378,16 @@ while True:
             # print(*my_base.current_targets, file=sys.stderr, flush=True)
             # print("patrol ({}, {})".format(curr_hero.patrol.x, curr_hero.patrol.y), file=sys.stderr, flush=True)
 
+        # If Offense and a lot mana, in high_morale for 5 rounds
+        if curr_hero.role == 'O':
+            if my_base.mana_OO():
+                curr_hero.high_morale = 5
+            else:
+                curr_hero.high_morale -= 1
+                curr_hero.high_morale = max(0, curr_hero.high_morale)
+        else:
+            curr_hero.high_morale = 0
+
     for k, v in enemy_base.heroes.items():
         print("o{} ({}, {})".format(k, v.x, v.y), file=sys.stderr, flush=True)
 
@@ -394,13 +414,21 @@ while True:
         if h.wind_spell:
             print("SPELL WIND {} {} {}".format(
                 enemy_base.x, enemy_base.y, h.get_detail()))
+            h.act_log[:0] = ['W']
         elif h.shield_spell:
             print("SPELL SHIELD {} {}".format(h.shield_spell, h.get_detail()))
+            h.act_log[:0] = ['S']
         elif h.control_spell:
             print("SPELL CONTROL {} {} {} {}".format(
                 h.control_spell, enemy_base.x if int(h.control_spell) > 5 else my_base.x, enemy_base.y if int(h.control_spell) > 5 else my_base.y, h.get_detail()))
+            h.act_log[:0] = ['C']
+        elif h.high_morale and sum(x is not None for x in h.act_log[:3]) > 2:
+            # High morale and spelled twice, move ahead to seek spell
+            print("MOVE {} {} {}".format(h.enemy_base.x, h.enemy_base.y, h.get_detail()))
         elif h.target:
             print("MOVE {} {} {}".format(h.target.x+h.target.vx,
                   h.target.y+h.target.vy, h.get_detail()))
+            h.act_log[:0] = [None]
         else:
             print("MOVE {} {} {}".format(h.patrol.x, h.patrol.y, h.get_detail()))
+            h.act_log[:0] = [None]
