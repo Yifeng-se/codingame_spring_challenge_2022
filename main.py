@@ -427,8 +427,8 @@ while True:
             # High morale and spelled twice, move ahead to seek spell
             print("MOVE {} {} {}".format(h.enemy_base.x, h.enemy_base.y, h.get_detail()))
         elif h.target:
-            print("MOVE {} {} {}".format(h.target.x+h.target.vx,
-                  h.target.y+h.target.vy, h.get_detail()))
+            print("MOVE {} {} {}".format(h.target.x+(h.target.vx if h.target.id>5 else 0),
+                  h.target.y+(h.target.vy if h.target.id>5 else 0), h.get_detail()))
             h.act_log[:0] = [None]
         else:
             print("MOVE {} {} {}".format(h.patrol.x, h.patrol.y, h.get_detail()))
