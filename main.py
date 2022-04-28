@@ -146,7 +146,7 @@ class Hero():
 
     # Offensive care about its own patrol position, defensive care about Gate and its own patrol area
     def check_care_area(self, m):
-        return self.role[0] == 'O' \
+        return (self.role[0] == 'O' and get_distance_ab(m, self.base) >= 8000)\
             or (self.role[0] != 'O' and get_distance_ab(m, self.base) < 8000)
         # or get_distance_ab(m, self.patrol) < 3300 \
 
@@ -200,7 +200,7 @@ class Hero():
             if get_distance_ab(self.target, self.enemy_base) < 7800:
                 if not self.target.shld_lf and self.get_distance(self.target) < 1280 and self.target.id > 5:
                     self.wind_spell = True
-                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and (self.target.id < 5 or self.target.id > 5 and self.target.threatFor != 2):
+                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and (self.target.id <= 5 or self.target.id > 5 and self.target.threatFor != 2):
                     self.control_spell = str(self.target.id)
                 if not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.id > 5 and self.target.threatFor == 2 and self.target.health >= 10:
                     self.shield_spell = str(self.target.id)
@@ -264,9 +264,7 @@ class Hero():
                     self.find_solution = 'OP'
             else:
                 # find the closest one to enemy_base
-                if self.find_closest(enemy_base, l_monster, current_targets):
-                    self.find_solution = 'OO'
-                if self.find_closest(enemy_base, enemy_base.heroes.values(), current_targets):
+                if self.find_closest(enemy_base, l_monster + list(enemy_base.heroes.values()), current_targets):
                     self.find_solution = 'OO'
 
         # print("T{} ".format(self.target.id if self.target else None), file=sys.stderr, flush=True)
@@ -340,7 +338,12 @@ while True:
         l_hero_sort.append(v)
     l_hero_sort = sorted(l_hero_sort, key=lambda hero: hero.base_distance)
 
-    if len(my_base.goal_threat_m) >= 3:
+    threat_hero_cnt = 0
+    for h in enemy_base.heroes.values():
+        if get_distance_ab(my_base, h) < 6000:
+            threat_hero_cnt += 1
+
+    if len(my_base.goal_threat_m) >= 3 and threat_hero_cnt > 0:
         if my_base.stratigic == 'O':
             # Change stratigic, need to reset patrol for heroes
             my_base.stratigic = 'D'
@@ -394,8 +397,8 @@ while True:
 
     for i in range(heroes_per_player):
         curr_hero = l_hero_sort[i]
-        print("Decision order: {}, curr ({}, {}), high {}".format(
-            curr_hero.id, curr_hero.x, curr_hero.y, curr_hero.high_morale), file=sys.stderr, flush=True)
+        print("Decision order: {}, curr ({}, {}), high {}, act_log {}".format(
+            curr_hero.id, curr_hero.x, curr_hero.y, curr_hero.high_morale, ' '.join(map(str, curr_hero.act_log[:5]))), file=sys.stderr, flush=True)
 
         # If arrived patrol, go to next one
         if curr_hero.get_distance(curr_hero.patrol) < 600 and hasattr(curr_hero.patrol, 'next'):
@@ -421,15 +424,37 @@ while True:
             h.act_log[:0] = ['S']
         elif h.control_spell:
             print("SPELL CONTROL {} {} {} {}".format(
-                h.control_spell, enemy_base.x if int(h.control_spell) > 5 else my_base.x, enemy_base.y if int(h.control_spell) > 5 else my_base.y, h.get_detail()))
+                h.control_spell, enemy_base.x if int(h.control_spell) > 5 else 8800, enemy_base.y if int(h.control_spell) > 5 else 4500, h.get_detail()))
             h.act_log[:0] = ['C']
-        elif h.high_morale and sum(x is not None for x in h.act_log[:3]) > 2:
+        elif h.high_morale and sum(x is not None for x in h.act_log[:3]) > 1:
             # High morale and spelled twice, move ahead to seek spell
-            print("MOVE {} {} {}".format(h.enemy_base.x, h.enemy_base.y, h.get_detail()))
-        elif h.target:
-            print("MOVE {} {} {}".format(h.target.x+(h.target.vx if h.target.id>5 else 0),
-                  h.target.y+(h.target.vy if h.target.id>5 else 0), h.get_detail()))
+            print("MOVE {} {} {}".format(3000 if h.enemy_base.x==0 else h.enemy_base.x-3000, 3000 if h.enemy_base.y==0 else h.enemy_base.y-3000, h.get_detail()))
             h.act_log[:0] = [None]
+        elif h.target:
+            if h.find_solution == 'OO' and h.target.id > 5:
+                # Actually I want to protect it
+                # Is there any enemy hero close to the targe?
+                l_e_hero_sort = []
+                for k, v in enemy_base.heroes.items():
+                    v.protect_distance = get_distance_ab(v, h.target)
+                    l_e_hero_sort.append(v)
+                l_e_hero_sort = sorted(l_e_hero_sort, key=lambda hero: hero.protect_distance)
+                control_enemy = None
+                for i in l_e_hero_sort:
+                    if not i.shld_lf and h.get_distance(i) < 2200 and my_base.mana >= 10:
+                        control_enemy = str(i.id)
+                        break
+                if control_enemy:
+                    print("SPELL CONTROL {} {} {} {}".format(
+                    control_enemy, 8800, 4500, h.get_detail()+'-PRT'))
+                    h.act_log[:0] = ['C']
+                else:
+                    print("MOVE {} {} {}".format(3000 if h.enemy_base.x==0 else h.enemy_base.x-3000, 3000 if h.enemy_base.y==0 else h.enemy_base.y-3000, h.get_detail()))
+                    h.act_log[:0] = [None]
+            else:
+                print("MOVE {} {} {}".format(h.target.x+(h.target.vx if h.target.id>5 else 0),
+                    h.target.y+(h.target.vy if h.target.id>5 else 0), h.get_detail()))
+                h.act_log[:0] = [None]
         else:
             print("MOVE {} {} {}".format(h.patrol.x, h.patrol.y, h.get_detail()))
             h.act_log[:0] = [None]
