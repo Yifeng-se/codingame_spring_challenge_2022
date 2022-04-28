@@ -121,7 +121,7 @@ class Hero():
         self.base = base
         self.base_distance = get_distance_ab(self, base)
         self.enemy_base = enemy_base
-        self.shield_life = shieldLife
+        self.shld_lf = shieldLife
         self.is_controlled = isControlled
         self.role = 'D'
         self.high_morale = 0
@@ -163,7 +163,7 @@ class Hero():
             if self.check_care_area(o) and (self.target is None or d < min_dis):
                 self.target = o
                 min_dis = d
-                target_id = o.id
+                target_id = str(o.id)
         # if self.target:
         #    print("find target {} ({}, {}): ".format(self.target.id,
         #          self.target.x, self.target.y), file=sys.stderr, flush=True)
@@ -269,6 +269,7 @@ class Hero():
                 if self.find_closest(enemy_base, enemy_base.heroes.values(), current_targets):
                     self.find_solution = 'OO'
 
+        # print("T{} ".format(self.target.id if self.target else None), file=sys.stderr, flush=True)
         return self.target.id if self.target else None
 
     def get_detail(self):
@@ -393,8 +394,8 @@ while True:
 
     for i in range(heroes_per_player):
         curr_hero = l_hero_sort[i]
-        print("Decision order: {}, curr ({}, {}), base ({}, {}), dis {}, role {}-{}".format(
-            curr_hero.id, curr_hero.x, curr_hero.y, curr_hero.base.x, curr_hero.base.y, curr_hero.base_distance, my_base.stratigic, curr_hero.role), file=sys.stderr, flush=True)
+        print("Decision order: {}, curr ({}, {}), high {}".format(
+            curr_hero.id, curr_hero.x, curr_hero.y, curr_hero.high_morale), file=sys.stderr, flush=True)
 
         # If arrived patrol, go to next one
         if curr_hero.get_distance(curr_hero.patrol) < 600 and hasattr(curr_hero.patrol, 'next'):
