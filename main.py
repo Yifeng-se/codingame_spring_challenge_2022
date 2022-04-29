@@ -209,11 +209,7 @@ class Hero():
                 self.shield_spell = str(self.id)
         if self.target and self.find_solution[1] == 'O':
             # how close is my target to enemy_base?
-            if get_distance_ab(self.target, self.enemy_base) < 2800:
-                if not self.target.shld_lf and self.get_distance(self.target) < 1280 \
-                    and self.target.id > 5:
-                    self.wind_spell = True
-            elif get_distance_ab(self.target, self.enemy_base) < 7800:
+            if get_distance_ab(self.target, self.enemy_base) < 7800:
                 if not self.target.shld_lf and self.get_distance(self.target) < 1280 \
                     and self.target.id > 5:
                     self.wind_spell = True
