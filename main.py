@@ -50,6 +50,7 @@ class Base():
         self.threat_m = []
         self.goal_threat_m = []
         self.heroes = {}
+        self.threat_hero_cnt = 0
 
         # Defense patrol route
         self.bp = Patrol('base', x + 800 if x == 0 else x -
@@ -69,10 +70,10 @@ class Base():
         #                   5200 if y == 0 else y - 5200)
         # self.fp1 = Patrol('fp1', 10600, 2200)
         # self.fp2 = Patrol('fp2', 7000, 6800)
-        self.fp0 = Patrol('fp0', enemy_x + 2200 if enemy_x == 0 else enemy_x - 2200,
-                          enemy_y + 6000 if enemy_y == 0 else enemy_y - 6000)
-        self.fp1 = Patrol('fp1', enemy_x + 6000 if enemy_x == 0 else enemy_x - 6000,
-                          enemy_y + 2200 if enemy_y == 0 else enemy_y - 2200)
+        self.fp0 = Patrol('fp0', enemy_x + 1000 if enemy_x == 0 else enemy_x - 1000,
+                          enemy_y + 5000 if enemy_y == 0 else enemy_y - 5000)
+        self.fp1 = Patrol('fp1', enemy_x + 5000 if enemy_x == 0 else enemy_x - 5000,
+                          enemy_y + 1000 if enemy_y == 0 else enemy_y - 1000)
         self.fp2 = Patrol('fp2', 8800, 4500)
         self.fp0.go_next(self.fp1)
         self.fp1.go_next(self.fp2)
@@ -90,6 +91,7 @@ class Base():
         self.current_targets.clear()
         self.threat_m.clear()
         self.goal_threat_m.clear()
+        self.threat_hero_cnt = 0
 
     def mana_OO(self):
         return self.mana >= 80
@@ -126,13 +128,16 @@ class Hero():
         self.role = 'D'
         self.high_morale = 0
         self.act_log = []
+        self.threat_hero = False
+        self.enemy_base_distance = get_distance_ab(self, self.enemy_base)
 
     def round_set(self, x, y, shieldLife, isControlled):
         self.x = x
         self.y = y
         self.base_distance = get_distance_ab(self, self.base)
-        self.shield_life = shieldLife
+        self.shld_lf = shieldLife
         self.is_controlled = isControlled
+        self.enemy_base_distance = get_distance_ab(self, self.enemy_base)
 
     def reset_target(self):
         self.target = None
@@ -195,16 +200,30 @@ class Hero():
                         and not self.target.is_controlled
                             and self.target.threatFor != 2):
                         self.control_spell = str(self.target.id)
+        if self.target and self.find_solution[0] == 'D':
+            if self.base.threat_hero_cnt > 0 \
+                and not self.shld_lf \
+                and self.base_distance < 8000 \
+                and curr_mana >= 10:
+                # Enemy hero! Shield myself
+                self.shield_spell = str(self.id)
         if self.target and self.find_solution[1] == 'O':
             # how close is my target to enemy_base?
-            if get_distance_ab(self.target, self.enemy_base) < 7800:
-                if not self.target.shld_lf and self.get_distance(self.target) < 1280 and self.target.id > 5:
+            if get_distance_ab(self.target, self.enemy_base) < 2800:
+                if not self.target.shld_lf and self.get_distance(self.target) < 1280 \
+                    and self.target.id > 5:
                     self.wind_spell = True
-                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and (self.target.id <= 5 or self.target.id > 5 and self.target.threatFor != 2):
+            elif get_distance_ab(self.target, self.enemy_base) < 7800:
+                if not self.target.shld_lf and self.get_distance(self.target) < 1280 \
+                    and self.target.id > 5:
+                    self.wind_spell = True
+                if not self.target.shld_lf and self.get_distance(self.target) < 2200 \
+                    and (self.target.id <= 5 or self.target.id > 5 and self.target.threatFor != 2):
                     self.control_spell = str(self.target.id)
-                if not self.target.shld_lf and self.get_distance(self.target) < 2200 and self.target.id > 5 and self.target.threatFor == 2 and self.target.health >= 10:
+                if not self.target.shld_lf and self.get_distance(self.target) < 2200 \
+                    and self.target.id > 5 and self.target.threatFor == 2 \
+                    and self.target.health >= 15 and get_distance_ab(self.target, self.enemy_base) < 4000:
                     self.shield_spell = str(self.target.id)
-
 
         if not self.wind_spell and not self.control_spell and not self.shield_spell:
             # no threat target, no shooting, how many monster around me?
@@ -212,12 +231,12 @@ class Hero():
                 if not m.shld_lf and self.get_distance(m) < 1280:
                     iWindCnt += 1
 
-            if iWindCnt > 4 and curr_mana > 50:
+            if iWindCnt > 3 and curr_mana > 50:
                 self.wind_spell = True
 
-        if not self.wind_spell and not self.control_spell and not self.shield_spell and curr_mana > 200:
-            if iWindCnt > 1:
-                self.wind_spell = True
+        # if not self.wind_spell and not self.control_spell and not self.shield_spell and curr_mana > 200:
+        #    if iWindCnt > 1:
+        #        self.wind_spell = True
 
         return self.wind_spell or self.control_spell or self.shield_spell
 
@@ -338,12 +357,12 @@ while True:
         l_hero_sort.append(v)
     l_hero_sort = sorted(l_hero_sort, key=lambda hero: hero.base_distance)
 
-    threat_hero_cnt = 0
     for h in enemy_base.heroes.values():
-        if get_distance_ab(my_base, h) < 6000:
-            threat_hero_cnt += 1
+        if h.enemy_base_distance < 6000:
+            my_base.threat_hero_cnt += 1
+            h.threat_hero = True
 
-    if len(my_base.goal_threat_m) >= 3 and threat_hero_cnt > 0:
+    if len(my_base.goal_threat_m) >= 3 and my_base.threat_hero_cnt > 0:
         if my_base.stratigic == 'O':
             # Change stratigic, need to reset patrol for heroes
             my_base.stratigic = 'D'
