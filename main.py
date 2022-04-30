@@ -435,6 +435,8 @@ while True:
             else:
                 curr_hero.role = 'D' + str(iDCnt)
                 iDCnt += 1
+            if i==2:
+                curr_hero.role = 'O'
         elif curr_hero.role[0] == 'D':
             curr_hero.role = 'D' + str(iDCnt)
             iDCnt += 1
