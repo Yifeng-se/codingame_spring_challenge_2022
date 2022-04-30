@@ -327,11 +327,11 @@ class Hero():
         mid_x = enemy_base.x
         mid_y = enemy_base.y
         if enemy_base.x > h.ball.x:
-            mid_x = min(h.ball.x+h.ball.vx+900, 1280)
+            mid_x = min(h.ball.x+h.ball.vx+900, enemy_base.x - 1280)
         else:
             mid_x = max(h.ball.x+h.ball.vx-900, 1280)
         if enemy_base.y > h.ball.y:
-            mid_y = min(h.ball.y+h.ball.vy+900, 1280)
+            mid_y = min(h.ball.y+h.ball.vy+900, enemy_base.y - 1280)
         else:
             mid_y = max(h.ball.y+h.ball.vy-900, 1280)
         return (mid_x, mid_y)
