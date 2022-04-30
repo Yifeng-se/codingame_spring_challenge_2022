@@ -50,7 +50,7 @@ class Base():
         self.threat_m = []
         self.goal_threat_m = []
         self.heroes = {}
-        self.threat_hero_cnt = 0
+        self.threat_heros = []
 
         # Defense patrol route
         self.bp = Patrol('base', x + 800 if x == 0 else x -
@@ -59,7 +59,8 @@ class Base():
                           y + 6000 if y == 0 else y - 6000)
         self.dp1 = Patrol('dp1', x + 6000 if x == 0 else x - 6000,
                           y + 2200 if y == 0 else y - 2200)
-        self.dp2 = Patrol('dp2', 8800, 4500)
+        self.dp2 = Patrol('dp2', x + 6000 if x == 0 else x - 6000,
+                          y + 6000 if y == 0 else y - 6000)
         self.dp0.go_next(self.dp1)
         self.dp1.go_next(self.dp2)
         self.dp2.go_next(self.dp0)
@@ -83,6 +84,15 @@ class Base():
         self.fp2.go_next(self.fp3)
         self.fp3.go_next(self.fp0)
 
+        self.mp0 = Patrol('mp0', 8815, 4500)
+        self.mp1 = Patrol('mp1', 13500 if x == 0 else x - 13500,
+                        3500 if y == 0 else y - 3500)
+        self.mp2 = Patrol('mp2', 9500 if x == 0 else x - 9500,
+                        7500 if y == 0 else y - 7500)
+        self.mp0.go_next(self.mp1)
+        self.mp1.go_next(self.mp2)
+        self.mp2.go_next(self.mp0)
+
     def get_distance(self, o):
         return get_distance_ab(self, o)
 
@@ -94,10 +104,10 @@ class Base():
         self.current_targets.clear()
         self.threat_m.clear()
         self.goal_threat_m.clear()
-        self.threat_hero_cnt = 0
+        self.threat_heros.clear()
 
     def mana_OO(self):
-        return self.mana >= (80 if not self.threat_hero_cnt else 100)
+        return self.mana >= (80 if not self.threat_heros else 100)
 
 
 my_base = Base(x=base_x, y=base_y, health=3, mana=0)
@@ -196,6 +206,7 @@ class Hero():
         # How many monster around me?
         # print("curr_mana: " + str(curr_mana), file=sys.stderr, flush=True)
         iWindCnt = 0
+        iWindHPSum = 0
 
         if self.target and self.find_solution[1] == 'T':
             # It is a threat target, what should I do?
@@ -209,7 +220,7 @@ class Hero():
                 # Can I kill target before it reach base?
                 the_turns_i_need_to_kill_it = round(self.target.health / 2)
                 the_turns_it_will_reach_base = math.trunc(
-                    (get_distance_ab(self.target, self.base) - 300) / 400)
+                    (get_distance_ab(self.target, self.base) - 300 - 2200) / 400)
                 if the_turns_i_need_to_kill_it > the_turns_it_will_reach_base:
                     # I cannot kill the monster in time, I should use spell
                     if not self.target.shld_lf and self.get_distance(self.target) < 1280:
@@ -219,7 +230,7 @@ class Hero():
                             and self.target.threatFor != 2):
                         self.control_spell = str(self.target.id)
         if self.target and self.find_solution[0] == 'D':
-            if self.base.threat_hero_cnt > 0 \
+            if self.base.threat_heros \
                 and not self.shld_lf \
                 and self.base_distance < 8000 \
                 and curr_mana >= 10:
@@ -245,8 +256,9 @@ class Hero():
             for m in l_monster:
                 if not m.shld_lf and self.get_distance(m) < 1280:
                     iWindCnt += 1
+                    iWindHPSum += m.health
 
-            if iWindCnt > 3 and curr_mana > 50:
+            if (iWindCnt > 2 or iWindHPSum > 30) and curr_mana > 50:
                 self.wind_spell = True
 
         # if not self.wind_spell and not self.control_spell and not self.shield_spell and curr_mana > 200:
@@ -388,10 +400,10 @@ while True:
 
     for h in enemy_base.heroes.values():
         if h.enemy_base_distance < 6000:
-            my_base.threat_hero_cnt += 1
+            my_base.threat_heros.append(h)
             h.threat_hero = True
 
-    if len(my_base.goal_threat_m) >= 3 and my_base.threat_hero_cnt > 0:
+    if len(my_base.goal_threat_m) >= 3 and len(my_base.threat_heros) > 0:
         if my_base.stratigic == 'O':
             # Change stratigic, need to reset patrol for heroes
             my_base.stratigic = 'D'
@@ -505,8 +517,29 @@ while True:
     for h in l_heroes:
         # print("Command order: " + str(h.id), file=sys.stderr, flush=True)
         if h.wind_spell:
-            print("SPELL WIND {} {} {}".format(
-                enemy_base.x, enemy_base.y, h.get_detail()))
+            if h.role == 'O':
+                print("SPELL WIND {} {} {}".format(
+                    enemy_base.x, enemy_base.y, h.get_detail()))
+            elif len(my_base.threat_heros) == 1 and h.get_distance(my_base.threat_heros[0]) > 1280:
+                t = my_base.threat_heros[0]
+                if my_base.x == 0 and  t.x+2000 <= t.y:
+                    print("SPELL WIND {} {} {}".format(
+                        6500, 400, h.get_detail()))
+                elif my_base.x == 0 and t.x > t.y+2000:
+                    print("SPELL WIND {} {} {}".format(
+                        400, 6500, h.get_detail()))
+                elif my_base.x == 17630 and 17630-t.x+2000 <= 9000-t.y:
+                    print("SPELL WIND {} {} {}".format(
+                        17630-6500, 9000-400, h.get_detail()))
+                elif my_base.x == 17630 and 17630-t.x > 9000-t.y+2000:
+                    print("SPELL WIND {} {} {}".format(
+                        17630-400, 9000-6500, h.get_detail()))
+                else:
+                    print("SPELL WIND {} {} {}".format(
+                        enemy_base.x, enemy_base.y, h.get_detail()))
+            else:
+                print("SPELL WIND {} {} {}".format(
+                    enemy_base.x, enemy_base.y, h.get_detail()))
             h.act_log[:0] = ['W']
         elif h.shield_spell:
             print("SPELL SHIELD {} {}".format(h.shield_spell, h.get_detail()))
