@@ -281,7 +281,7 @@ class Hero():
             else:
                 self.patrol = self.base.dp1
         else:  # role[0] == 'O'
-            self.patrol = self.base.fp1
+            self.patrol = self.base.mp0
 
         return self.patrol.id if self.patrol else None
 
@@ -317,7 +317,11 @@ class Hero():
         return self.target.id if self.target else None
 
     def get_detail(self):
-        return "{}-{}-{}-{}".format(self.base.stratigic, self.role, 'B'+str(self.ball.id) if self.ball else 'T'+str(self.target.id) if self.target else -1, self.find_solution if self.find_solution else '')
+        return "{}-{}-{}-{}".format(
+            self.base.stratigic,
+            self.role,
+            'B'+str(self.ball.id) if self.ball else 'T'+str(self.target.id) if self.target else -1,
+            self.find_solution if self.find_solution else '')
 
     def get_mid_xy(self, ball):
         mid_x = enemy_base.x
@@ -449,8 +453,13 @@ while True:
             else:
                 curr_hero.high_morale -= 1
                 curr_hero.high_morale = max(0, curr_hero.high_morale)
+                if curr_hero.high_morale == 0 \
+                    and curr_hero.enemy_base_distance >= 6500 \
+                        and curr_hero.patrol.id[0] == 'f':
+                    curr_hero.patrol = curr_hero.base.mp0
         else:
             curr_hero.high_morale = 0
+
 
     for k, v in enemy_base.heroes.items():
         print("o{} ({}, {})".format(k, v.x, v.y), file=sys.stderr, flush=True)
@@ -469,9 +478,11 @@ while True:
             my_base.goal_threat_m, my_base.threat_m, my_base.l_monster, my_base.current_targets, enemy_base))
         # print(*my_base.current_targets, file=sys.stderr, flush=True)
 
-        if curr_hero.role[0] == 'O' and curr_hero.enemy_base_distance < 7000 \
-            and my_base.mana >= 10 and curr_hero.high_morale:
+        if curr_hero.role[0] == 'O' and my_base.mana >= 10 and (curr_hero.high_morale or curr_hero.enemy_base_distance < 6500):
             # Attack plan (if any) will over write previous target
+            # Move patrol to fight patrol
+            if curr_hero.patrol.id[0] == 'm':
+                curr_hero.patrol = my_base.fp1
             # Plan how to goal:
             # If I'm close to enemy_base, and I don't have ball, find ball:
             for m in l_monster_sort:
@@ -570,7 +581,7 @@ while True:
                     h.act_log[:0] = ['C']
                 else:
                     mid = h.get_mid_xy(h.ball)
-                    print("MOVE {} {} {}".format(mid[0], mid[1], h.get_detail()))
+                    print("MOVE {} {} {}".format(mid[0], mid[1], h.get_detail()+'-MID'))
                     h.act_log[:0] = [None]
             else:
                 # Go between ball and enemy_base
