@@ -74,11 +74,14 @@ class Base():
                           enemy_y + 5000 if enemy_y == 0 else enemy_y - 5000)
         self.fp1 = Patrol('fp1', enemy_x + 5000 if enemy_x == 0 else enemy_x - 5000,
                           enemy_y + 1000 if enemy_y == 0 else enemy_y - 1000)
-        self.fp2 = Patrol('fp2', 8800, 4500)
+        self.fp2 = Patrol('fp2', enemy_x + 4000 if enemy_x == 0 else enemy_x - 4000,
+                        enemy_y + 4000 if enemy_y == 0 else enemy_y - 4000)
+        self.fp3 = Patrol('fp3', enemy_x + 2200 if enemy_x == 0 else enemy_x - 2200,
+                        enemy_y + 2200 if enemy_y == 0 else enemy_y - 2200)
         self.fp0.go_next(self.fp1)
         self.fp1.go_next(self.fp2)
-        self.fp2.go_next(self.fp0)
-        self.l_f_patrol = [self.fp0, self.fp1, self.fp2]
+        self.fp2.go_next(self.fp3)
+        self.fp3.go_next(self.fp0)
 
     def get_distance(self, o):
         return get_distance_ab(self, o)
@@ -94,7 +97,7 @@ class Base():
         self.threat_hero_cnt = 0
 
     def mana_OO(self):
-        return self.mana >= 80
+        return self.mana >= (80 if not self.threat_hero_cnt else 100)
 
 
 my_base = Base(x=base_x, y=base_y, health=3, mana=0)
@@ -113,6 +116,7 @@ class Monster():
         self.vy = vy
         self.nearBase = nearBase
         self.threatFor = threatFor
+        self.enemy_base_distance = get_distance_ab(self, enemy_base)
 
 
 class Hero():
@@ -130,6 +134,7 @@ class Hero():
         self.act_log = []
         self.threat_hero = False
         self.enemy_base_distance = get_distance_ab(self, self.enemy_base)
+        self.ball = None
 
     def round_set(self, x, y, shieldLife, isControlled):
         self.x = x
@@ -145,15 +150,28 @@ class Hero():
         self.control_spell = None
         self.shield_spell = None
         self.find_solution = None
+        self.ball = None
 
     def get_distance(self, oppo):
         return get_distance_ab(self, oppo)
 
     # Offensive care about its own patrol position, defensive care about Gate and its own patrol area
     def check_care_area(self, m):
-        return (self.role[0] == 'O' and get_distance_ab(m, self.base) >= 8000)\
-            or (self.role[0] != 'O' and get_distance_ab(m, self.base) < 8000)
+        return (self.role[0] == 'O' and get_distance_ab(m, self.enemy_base) < 10000)\
+            or (self.role[0] != 'O' and get_distance_ab(m, self.base) < 9000)
         # or get_distance_ab(m, self.patrol) < 3300 \
+
+    def find_ball(self, start_point, oppos, shielded):
+        min_dis = 0
+        for o in oppos:
+            d = get_distance_ab(start_point, o)
+            if self.check_care_area(o) \
+                and (self.ball is None or d < min_dis) \
+                    and (o.shld_lf == shielded) \
+                        and self.get_distance(o) <= 2200:
+                self.ball = o
+                min_dis = d
+        return self.ball
 
     def find_closest(self, start_point, oppos, current_targets):
         target_id = None
@@ -207,19 +225,20 @@ class Hero():
                 and curr_mana >= 10:
                 # Enemy hero! Shield myself
                 self.shield_spell = str(self.id)
-        if self.target and self.find_solution[1] == 'O':
-            # how close is my target to enemy_base?
-            if get_distance_ab(self.target, self.enemy_base) < 7800:
-                if not self.target.shld_lf and self.get_distance(self.target) < 1280 \
-                    and self.target.id > 5:
-                    self.wind_spell = True
-                if not self.target.shld_lf and self.get_distance(self.target) < 2200 \
-                    and (self.target.id <= 5 or self.target.id > 5 and self.target.threatFor != 2):
-                    self.control_spell = str(self.target.id)
-                if not self.target.shld_lf and self.get_distance(self.target) < 2200 \
-                    and self.target.id > 5 and self.target.threatFor == 2 \
-                    and self.target.health >= 15 and get_distance_ab(self.target, self.enemy_base) < 4000:
-                    self.shield_spell = str(self.target.id)
+
+        # if self.target and self.find_solution[1] == 'O':
+        #     # how close is my target to enemy_base?
+        #     if get_distance_ab(self.target, self.enemy_base) < 7800:
+        #         if not self.target.shld_lf and self.get_distance(self.target) < 1280 \
+        #             and self.target.id > 5:
+        #             self.wind_spell = True
+        #         if not self.target.shld_lf and self.get_distance(self.target) < 2200 \
+        #             and (self.target.id <= 5 or self.target.id > 5 and self.target.threatFor != 2):
+        #             self.control_spell = str(self.target.id)
+        #         if not self.target.shld_lf and self.get_distance(self.target) < 2200 \
+        #             and self.target.id > 5 and self.target.threatFor == 2 \
+        #             and self.target.health >= 15 and get_distance_ab(self.target, self.enemy_base) < 4000:
+        #             self.shield_spell = str(self.target.id)
 
         if not self.wind_spell and not self.control_spell and not self.shield_spell:
             # no threat target, no shooting, how many monster around me?
@@ -279,14 +298,27 @@ class Hero():
                     self.find_solution = 'OP'
             else:
                 # find the closest one to enemy_base
-                if self.find_closest(enemy_base, l_monster + list(enemy_base.heroes.values()), current_targets):
+                if self.find_closest(enemy_base, l_monster, current_targets):
                     self.find_solution = 'OO'
 
         # print("T{} ".format(self.target.id if self.target else None), file=sys.stderr, flush=True)
         return self.target.id if self.target else None
 
     def get_detail(self):
-        return "{}-{}-{}-{}".format(self.base.stratigic, self.role, self.target.id if self.target else -1, self.find_solution if self.find_solution else '')
+        return "{}-{}-{}-{}".format(self.base.stratigic, self.role, 'B'+str(self.ball.id) if self.ball else 'T'+str(self.target.id) if self.target else -1, self.find_solution if self.find_solution else '')
+
+    def get_mid_xy(self, ball):
+        mid_x = enemy_base.x
+        mid_y = enemy_base.y
+        if enemy_base.x > h.ball.x:
+            mid_x = min(h.ball.x+h.ball.vx+900, my_base.fp3.x)
+        else:
+            mid_x = max(h.ball.x+h.ball.vx-900, my_base.fp3.x)
+        if enemy_base.y > h.ball.y:
+            mid_y = min(h.ball.y+h.ball.vy+900, my_base.fp3.y)
+        else:
+            mid_y = max(h.ball.y+h.ball.vy-900, my_base.fp3.y)
+        return (mid_x, mid_y)
 
 
 # game loop
@@ -345,6 +377,7 @@ while True:
             my_base.threat_m.append(i)
             if my_base.is_risky(i):
                 my_base.goal_threat_m.append(i)
+    l_monster_sort = sorted(my_base.l_monster, key=lambda m: m.enemy_base_distance)
 
     # sort heros by distance to the base
     l_hero_sort = []
@@ -424,6 +457,47 @@ while True:
             my_base.goal_threat_m, my_base.threat_m, my_base.l_monster, my_base.current_targets, enemy_base))
         # print(*my_base.current_targets, file=sys.stderr, flush=True)
 
+        if curr_hero.role[0] == 'O' and curr_hero.enemy_base_distance < 7000 \
+            and my_base.mana >= 10 and curr_hero.high_morale:
+            # Attack plan (if any) will over write previous target
+            # Plan how to goal:
+            # If I'm close to enemy_base, and I don't have ball, find ball:
+            for m in l_monster_sort:
+                if get_distance_ab(m, enemy_base) > 7000:
+                    break
+                if not curr_hero.ball:
+                    # Is it a ball?
+                    if not m.shld_lf:
+                        if curr_hero.get_distance(m) <= 1280 \
+                            and get_distance_ab(m, enemy_base) < 3500:
+                            # Near enough, kick it
+                            curr_hero.ball = m
+                            curr_hero.wind_spell = True
+                        elif m.threatFor != 2 \
+                            and curr_hero.get_distance(m) <= 2200:
+                            curr_hero.ball = m
+                            curr_hero.control_spell = str(m.id)
+                        elif m.health > get_distance_ab(m, enemy_base)/400*2 \
+                            and curr_hero.get_distance(m) <= 2200:
+                            # It's a strong ball, shield it
+                            curr_hero.ball = m
+                            curr_hero.shield_spell = str(m.id)
+                        elif curr_hero.get_distance(m) <= 1280 \
+                            and get_distance_ab(m, enemy_base) < 5500 \
+                            and curr_hero.enemy_base_distance < m.enemy_base_distance:
+                            curr_hero.ball = m
+                            curr_hero.wind_spell = True
+                        else: # it's ball, but either too far or too weak, Wait and see
+                            curr_hero.ball = m
+                    else: # it's shield
+                        # Is it target enemy?
+                        if m.threatFor == 2:
+                            # Looks good, follow and protect
+                            curr_hero.ball = m
+
+        if curr_hero.ball:
+            curr_hero.target = None
+            curr_hero.patrol = curr_hero.base.fp3
         # should I use spell or should I just farming
         if curr_hero.spell_check(my_base.l_monster, my_base.mana):
             my_base.mana -= 10
@@ -441,22 +515,20 @@ while True:
             print("SPELL CONTROL {} {} {} {}".format(
                 h.control_spell, enemy_base.x if int(h.control_spell) > 5 else 8800, enemy_base.y if int(h.control_spell) > 5 else 4500, h.get_detail()))
             h.act_log[:0] = ['C']
-        elif h.high_morale and sum(x is not None for x in h.act_log[:3]) > 1:
-            # High morale and spelled twice, move ahead to seek spell
-            print("MOVE {} {} {}".format(3000 if h.enemy_base.x==0 else h.enemy_base.x-3000, 3000 if h.enemy_base.y==0 else h.enemy_base.y-3000, h.get_detail()))
-            h.act_log[:0] = [None]
-        elif h.target:
-            if h.find_solution == 'OO' and h.target.id > 5:
-                # Actually I want to protect it
-                # Is there any enemy hero close to the targe?
+        elif h.ball:
+            # If ball is threat, I want to protect it, otherwise I just follow it
+            if h.ball.threatFor == 2:
+                # Is there any enemy hero close to the ball?
                 l_e_hero_sort = []
                 for k, v in enemy_base.heroes.items():
-                    v.protect_distance = get_distance_ab(v, h.target)
+                    v.protect_distance = get_distance_ab(v, h.ball)
                     l_e_hero_sort.append(v)
                 l_e_hero_sort = sorted(l_e_hero_sort, key=lambda hero: hero.protect_distance)
+
                 control_enemy = None
                 for i in l_e_hero_sort:
-                    if not i.shld_lf and h.get_distance(i) < 2200 and my_base.mana >= 10:
+                    if not i.shld_lf and h.get_distance(i) < 2200 \
+                        and my_base.mana >= 10 and get_distance_ab(i, h.ball) < 2200:
                         control_enemy = str(i.id)
                         break
                 if control_enemy:
@@ -464,12 +536,18 @@ while True:
                     control_enemy, 8800, 4500, h.get_detail()+'-PRT'))
                     h.act_log[:0] = ['C']
                 else:
-                    print("MOVE {} {} {}".format(3000 if h.enemy_base.x==0 else h.enemy_base.x-3000, 3000 if h.enemy_base.y==0 else h.enemy_base.y-3000, h.get_detail()))
+                    mid = h.get_mid_xy(h.ball)
+                    print("MOVE {} {} {}".format(mid[0], mid[1], h.get_detail()))
                     h.act_log[:0] = [None]
             else:
-                print("MOVE {} {} {}".format(h.target.x+(h.target.vx if h.target.id>5 else 0),
-                    h.target.y+(h.target.vy if h.target.id>5 else 0), h.get_detail()))
+                # Go between ball and enemy_base
+                mid = h.get_mid_xy(h.ball)
+                print("MOVE {} {} {}".format(mid[0], mid[1], h.get_detail()))
                 h.act_log[:0] = [None]
+        elif h.target:
+            print("MOVE {} {} {}".format(h.target.x+(h.target.vx if h.target.id>5 else 0),
+                h.target.y+(h.target.vy if h.target.id>5 else 0), h.get_detail()))
+            h.act_log[:0] = [None]
         else:
             print("MOVE {} {} {}".format(h.patrol.x, h.patrol.y, h.get_detail()))
             h.act_log[:0] = [None]
