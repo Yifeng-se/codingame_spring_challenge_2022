@@ -38,7 +38,8 @@ class Patrol():
 
 
 class Base():
-    def __init__(self, x, y, health, mana):
+    def __init__(self, id, x, y, health, mana):
+        self.id = id
         self.x = x
         self.y = y
         self.health = health
@@ -52,6 +53,7 @@ class Base():
         self.heroes = {}
         self.threat_heros = []
         self.morale = 0
+        self.deadly_monster = []
 
         # Defense patrol route
         self.bp = Patrol('base', x + 800 if x == 0 else x -
@@ -100,6 +102,12 @@ class Base():
     def is_risky(self, o):
         return self.get_distance(o) < 5000
 
+    def is_deadly(self, o):
+        the_turns_i_need_to_kill_it = round(o.health / 2)
+        the_turns_it_will_reach_base = math.trunc(
+            (get_distance_ab(o, self) - 300) / 400)
+        return the_turns_i_need_to_kill_it > the_turns_it_will_reach_base and o.shld_lf
+
     def round_reset(self):
         self.l_monster.clear()
         self.current_targets.clear()
@@ -108,9 +116,10 @@ class Base():
         self.threat_heros.clear()
         self.morale = 1 if self.mana >= 120 else \
             0 if self.mana < 30 else self.morale
+        self.deadly_monster.clear()
 
-my_base = Base(x=base_x, y=base_y, health=3, mana=0)
-enemy_base = Base(x=enemy_x, y=enemy_y, health=3, mana=0)
+my_base = Base(id=-1, x=base_x, y=base_y, health=3, mana=0)
+enemy_base = Base(id=-2, x=enemy_x, y=enemy_y, health=3, mana=0)
 
 
 class Monster():
@@ -126,6 +135,7 @@ class Monster():
         self.nearBase = nearBase
         self.threatFor = threatFor
         self.enemy_base_distance = get_distance_ab(self, enemy_base)
+        self.my_base_distance = get_distance_ab(self, my_base)
 
 
 class Hero():
@@ -139,7 +149,7 @@ class Hero():
         self.shld_lf = shieldLife
         self.is_controlled = isControlled
         self.role = 'D'
-        self.act_log = []
+        self.act_log = ['']
         self.threat_hero = False
         self.enemy_base_distance = get_distance_ab(self, self.enemy_base)
         self.ball = None
@@ -228,13 +238,15 @@ class Hero():
                         and not self.target.is_controlled
                             and self.target.threatFor != 2):
                         self.control_spell = str(self.target.id)
-        if self.target and self.find_solution[0] == 'D':
-            if self.base.threat_heros \
-                and not self.shld_lf \
-                and self.base_distance < 8000 \
-                and curr_mana >= 10:
-                # Enemy hero! Shield myself
-                self.shield_spell = str(self.id)
+        # if self.target and self.find_solution[0] == 'D':
+        if self.base.threat_heros \
+            and not self.shld_lf \
+            and self.base_distance < 8000 \
+            and curr_mana >= 10 \
+            and self.base.morale \
+            and (self.role[0] == 'G' or self.role[0] == 'D'): #morale mode, only one defence
+            # Enemy hero! Shield myself
+            self.shield_spell = str(self.id)
 
         # if self.target and self.find_solution[1] == 'O':
         #     # how close is my target to enemy_base?
@@ -400,8 +412,10 @@ while True:
             my_base.threat_m.append(i)
             if my_base.is_risky(i):
                 my_base.goal_threat_m.append(i)
+        if my_base.is_deadly(i):
+            my_base.deadly_monster.append(i)
     l_monster_sort = sorted(my_base.l_monster, key=lambda m: m.enemy_base_distance)
-
+    my_base.deadly_monster = sorted(my_base.deadly_monster, key=lambda m: m.my_base_distance)
     # sort heros by distance to the base
     l_hero_sort = []
     for k, v in my_base.heroes.items():
@@ -482,8 +496,13 @@ while True:
             curr_hero.role = 'D1'
         # find monster target
         if curr_hero.role != 'O1': # O1 should clone O
-            my_base.current_targets.append(curr_hero.find_target(
-                my_base.goal_threat_m, my_base.threat_m, my_base.l_monster, my_base.current_targets, enemy_base))
+            tmp_id = curr_hero.find_target(
+                my_base.goal_threat_m, my_base.threat_m, my_base.l_monster, my_base.current_targets, enemy_base)
+            deadly_monster_id = []
+            for m in my_base.deadly_monster:
+                deadly_monster_id.append(m.id)
+            if tmp_id not in list(deadly_monster_id):
+                my_base.current_targets.append(tmp_id)
             # print(*my_base.current_targets, file=sys.stderr, flush=True)
 
         if my_base.morale and curr_hero.role == 'D1':
@@ -539,6 +558,10 @@ while True:
         if curr_hero.ball:
             curr_hero.target = None
             curr_hero.patrol = curr_hero.base.fp3
+        elif curr_hero.role == 'O' and my_base.morale and curr_hero.act_log[0] == 'W':
+            # No ball, but last time I spell a wind, so go head to try to find the ball
+            curr_hero.target = enemy_base
+            curr_hero.find_solution = 'OP'
 
         # should I use spell or should I just farming
         if curr_hero.role != 'O1':
@@ -559,23 +582,23 @@ while True:
                     enemy_base.x-(m.x-h.x), # enemy_base.x if abs(m.x-enemy_base.x) > 30 else h.x,
                     enemy_base.y-(m.y-h.y), # enemy_base.y if abs(m.y-enemy_base.y) > 30 else h.y,
                     h.get_detail()))
-            # elif len(my_base.threat_heros) == 1 and h.get_distance(my_base.threat_heros[0]) > 1280:
-            #     t = my_base.threat_heros[0]
-            #     if my_base.x == 0 and  t.x+2000 <= t.y:
-            #         print("SPELL WIND {} {} {}".format(
-            #             6500, 400, h.get_detail()))
-            #     elif my_base.x == 0 and t.x > t.y+2000:
-            #         print("SPELL WIND {} {} {}".format(
-            #             400, 6500, h.get_detail()))
-            #     elif my_base.x == 17630 and 17630-t.x+2000 <= 9000-t.y:
-            #         print("SPELL WIND {} {} {}".format(
-            #             17630-6500, 9000-400, h.get_detail()))
-            #     elif my_base.x == 17630 and 17630-t.x > 9000-t.y+2000:
-            #         print("SPELL WIND {} {} {}".format(
-            #             17630-400, 9000-6500, h.get_detail()))
-            #     else:
-            #         print("SPELL WIND {} {} {}".format(
-            #             enemy_base.x, enemy_base.y, h.get_detail()))
+            elif len(my_base.threat_heros) == 1 and h.get_distance(my_base.threat_heros[0]) > 1280:
+                t = my_base.threat_heros[0]
+                if my_base.x == 0 and  t.x+2000 <= t.y:
+                    print("SPELL WIND {} {} {}".format(
+                        6500, 400, h.get_detail()))
+                elif my_base.x == 0 and t.x > t.y+2000:
+                    print("SPELL WIND {} {} {}".format(
+                        400, 6500, h.get_detail()))
+                elif my_base.x == 17630 and 17630-t.x+2000 <= 9000-t.y:
+                    print("SPELL WIND {} {} {}".format(
+                        17630-6500, 9000-400, h.get_detail()))
+                elif my_base.x == 17630 and 17630-t.x > 9000-t.y+2000:
+                    print("SPELL WIND {} {} {}".format(
+                        17630-400, 9000-6500, h.get_detail()))
+                else:
+                    print("SPELL WIND {} {} {}".format(
+                        enemy_base.x, enemy_base.y, h.get_detail()))
             else:
                 print("SPELL WIND {} {} {}".format(
                     30 if enemy_base.x == 0 else enemy_base.x - 30,
