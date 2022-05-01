@@ -106,7 +106,7 @@ class Base():
         self.threat_m.clear()
         self.goal_threat_m.clear()
         self.threat_heros.clear()
-        self.morale = 1 if self.mana >= 80 else \
+        self.morale = 1 if self.mana >= 120 else \
             0 if self.mana < 30 else self.morale
 
 my_base = Base(x=base_x, y=base_y, health=3, mana=0)
@@ -305,8 +305,16 @@ class Hero():
         elif self.role[0] == 'O':
             # offense, if we don't have much mana, find closest one
             if not self.base.morale:
-                if self.find_closest(self, l_monster, current_targets):
-                    self.find_solution = 'OP'
+                # find some monster near me and going ahead to enemy_base
+                if self.enemy_base_distance > 7000:
+                    l_near = [x for x in l_monster if get_distance_ab(self, x) <= 800]
+                    l_near_sort = sorted(l_near, key=lambda m: m.enemy_base_distance)
+                    if len(l_near_sort) > 0:
+                        self.target = l_near_sort[0]
+                        self.find_solution = 'OP'
+                if not self.target:
+                    if self.find_closest(self, l_monster, current_targets):
+                        self.find_solution = 'OP'
             else:
                 # find the closest one to enemy_base
                 if self.find_closest(enemy_base, l_monster, current_targets):
