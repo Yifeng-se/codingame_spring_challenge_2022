@@ -220,7 +220,7 @@ class Hero():
                 # Can I kill target before it reach base?
                 the_turns_i_need_to_kill_it = round(self.target.health / 2)
                 the_turns_it_will_reach_base = math.trunc(
-                    (get_distance_ab(self.target, self.base) - 300 - 2200) / 400)
+                    (get_distance_ab(self.target, self.base) - 300 - 1200) / 400)
                 if the_turns_i_need_to_kill_it > the_turns_it_will_reach_base:
                     # I cannot kill the monster in time, I should use spell
                     if not self.target.shld_lf and self.get_distance(self.target) < 1280:
@@ -493,6 +493,7 @@ while True:
                 if not curr_hero.ball:
                     # Is it a ball?
                     if not m.shld_lf:
+                        print("B {} {}".format(curr_hero.get_distance(m), get_distance_ab(m, enemy_base)), file=sys.stderr, flush=True)
                         if curr_hero.get_distance(m) <= 1280 \
                             and get_distance_ab(m, enemy_base) < 3500:
                             # Near enough, kick it
@@ -508,7 +509,7 @@ while True:
                             curr_hero.ball = m
                             curr_hero.shield_spell = str(m.id)
                         elif curr_hero.get_distance(m) <= 1280 \
-                            and get_distance_ab(m, enemy_base) < 5500 \
+                            and get_distance_ab(m, enemy_base) < 6500 \
                             and curr_hero.enemy_base_distance < m.enemy_base_distance:
                             curr_hero.ball = m
                             curr_hero.wind_spell = True
@@ -563,7 +564,7 @@ while True:
             h.act_log[:0] = ['C']
         elif h.ball:
             # If ball is threat, I want to protect it, otherwise I just follow it
-            if h.ball.threatFor == 2:
+            if h.ball.threatFor == 2 and h.ball.nearBase:
                 # Is there any enemy hero close to the ball?
                 l_e_hero_sort = []
                 for k, v in enemy_base.heroes.items():
