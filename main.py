@@ -51,6 +51,7 @@ class Base():
         self.goal_threat_m = []
         self.heroes = {}
         self.threat_heros = []
+        self.morale = 0
 
         # Defense patrol route
         self.bp = Patrol('base', x + 800 if x == 0 else x -
@@ -105,10 +106,8 @@ class Base():
         self.threat_m.clear()
         self.goal_threat_m.clear()
         self.threat_heros.clear()
-
-    def mana_OO(self):
-        return self.mana >= (80 if not self.threat_heros else 100)
-
+        self.morale = 1 if self.mana >= 80 else \
+            0 if self.mana < 30 else self.morale
 
 my_base = Base(x=base_x, y=base_y, health=3, mana=0)
 enemy_base = Base(x=enemy_x, y=enemy_y, health=3, mana=0)
@@ -140,7 +139,6 @@ class Hero():
         self.shld_lf = shieldLife
         self.is_controlled = isControlled
         self.role = 'D'
-        self.high_morale = 0
         self.act_log = []
         self.threat_hero = False
         self.enemy_base_distance = get_distance_ab(self, self.enemy_base)
@@ -153,6 +151,7 @@ class Hero():
         self.shld_lf = shieldLife
         self.is_controlled = isControlled
         self.enemy_base_distance = get_distance_ab(self, self.enemy_base)
+        self.second_attack_arrive = False
 
     def reset_target(self):
         self.target = None
@@ -188,7 +187,7 @@ class Hero():
         min_dis = 0
         for o in oppos:
             if hasattr(o, 'threatFor') and o.threatFor == 2 \
-                and not self.high_morale:
+                and o.nearBase and not self.base.morale:
                 continue
             if hasattr(o, 'id') and o.id in current_targets:
                 continue
@@ -258,7 +257,7 @@ class Hero():
                     iWindCnt += 1
                     iWindHPSum += m.health
 
-            if (iWindCnt > 2 or iWindHPSum > 30) and curr_mana > 50:
+            if (iWindCnt > 3 or iWindHPSum > 50) and curr_mana > 50:
                 self.wind_spell = True
 
         # if not self.wind_spell and not self.control_spell and not self.shield_spell and curr_mana > 200:
@@ -305,7 +304,7 @@ class Hero():
                     self.find_solution = 'DP'
         elif self.role[0] == 'O':
             # offense, if we don't have much mana, find closest one
-            if not self.base.mana_OO() and not self.high_morale:
+            if not self.base.morale:
                 if self.find_closest(self, l_monster, current_targets):
                     self.find_solution = 'OP'
             else:
@@ -402,20 +401,24 @@ while True:
         l_hero_sort.append(v)
     l_hero_sort = sorted(l_hero_sort, key=lambda hero: hero.base_distance)
 
+    # sometime O1 run further than O, change their order
+    if l_hero_sort[2].role == 'O1':
+        l_hero_sort[1], l_hero_sort[2] = l_hero_sort[2], l_hero_sort[1]
+
     for h in enemy_base.heroes.values():
         if h.enemy_base_distance < 6000:
             my_base.threat_heros.append(h)
             h.threat_hero = True
 
     if len(my_base.goal_threat_m) >= 3 and len(my_base.threat_heros) > 0:
-        if my_base.stratigic == 'O':
+        if my_base.stratigic != 'D':
             # Change stratigic, need to reset patrol for heroes
             my_base.stratigic = 'D'
             my_base.stratigic_change = True
         else:
             my_base.stratigic_change = False
     else:
-        if my_base.stratigic == 'D':
+        if my_base.stratigic != 'O':
             my_base.stratigic = 'O'
             my_base.stratigic_change = True
         else:
@@ -448,20 +451,12 @@ while True:
             # print(*my_base.current_targets, file=sys.stderr, flush=True)
             # print("patrol ({}, {})".format(curr_hero.patrol.x, curr_hero.patrol.y), file=sys.stderr, flush=True)
 
-        # If Offense and a lot mana, in high_morale for 5 rounds
+        # use morale to decide patrol_point
         if curr_hero.role == 'O':
-            if my_base.mana_OO():
-                curr_hero.high_morale = 5
-            else:
-                curr_hero.high_morale -= 1
-                curr_hero.high_morale = max(0, curr_hero.high_morale)
-                if curr_hero.high_morale == 0 \
-                    and curr_hero.enemy_base_distance >= 5600 \
-                        and curr_hero.patrol.id[0] == 'f':
-                    curr_hero.patrol = curr_hero.base.mp0
-        else:
-            curr_hero.high_morale = 0
-
+            if not my_base.morale \
+                and curr_hero.enemy_base_distance >= 5600 \
+                    and curr_hero.patrol.id[0] == 'f':
+                curr_hero.patrol = curr_hero.base.mp0
 
     for k, v in enemy_base.heroes.items():
         print("o{} ({}, {})".format(k, v.x, v.y), file=sys.stderr, flush=True)
@@ -469,18 +464,28 @@ while True:
     for i in range(heroes_per_player):
         curr_hero = l_hero_sort[i]
         print("Decision order: {}, curr ({}, {}), high {}, act_log {}".format(
-            curr_hero.id, curr_hero.x, curr_hero.y, curr_hero.high_morale, ' '.join(map(str, curr_hero.act_log[:5]))), file=sys.stderr, flush=True)
+            curr_hero.id, curr_hero.x, curr_hero.y, my_base.morale, ' '.join(map(str, curr_hero.act_log[:5]))), file=sys.stderr, flush=True)
 
         # If arrived patrol, go to next one
         if curr_hero.get_distance(curr_hero.patrol) < 600 and hasattr(curr_hero.patrol, 'next'):
             curr_hero.patrol = curr_hero.patrol.next
 
+        if not my_base.morale and curr_hero.role == 'O1':
+            curr_hero.role = 'D1'
         # find monster target
-        my_base.current_targets.append(curr_hero.find_target(
-            my_base.goal_threat_m, my_base.threat_m, my_base.l_monster, my_base.current_targets, enemy_base))
-        # print(*my_base.current_targets, file=sys.stderr, flush=True)
+        if curr_hero.role != 'O1': # O1 should clone O
+            my_base.current_targets.append(curr_hero.find_target(
+                my_base.goal_threat_m, my_base.threat_m, my_base.l_monster, my_base.current_targets, enemy_base))
+            # print(*my_base.current_targets, file=sys.stderr, flush=True)
 
-        if curr_hero.role[0] == 'O' and my_base.mana >= 10 and (curr_hero.high_morale or curr_hero.enemy_base_distance < 6500):
+        if my_base.morale and curr_hero.role == 'D1':
+            # Double attack, D1 => O
+            curr_hero.role = 'O1'
+        if curr_hero.role == 'O1':
+            if curr_hero.get_distance(l_hero_sort[2]) < 800:
+                l_hero_sort[2].second_attack_arrive = True
+
+        if curr_hero.role == 'O' and my_base.morale:
             # Attack plan (if any) will over write previous target
             # Move patrol to fight patrol
             if curr_hero.patrol.id[0] == 'm':
@@ -495,10 +500,12 @@ while True:
                     if not m.shld_lf:
                         print("B {} {}".format(curr_hero.get_distance(m), get_distance_ab(m, enemy_base)), file=sys.stderr, flush=True)
                         if curr_hero.get_distance(m) <= 1280 \
-                            and get_distance_ab(m, enemy_base) < 3500:
+                            and get_distance_ab(m, enemy_base) < 2200 + 400 + 30 + (2200 if curr_hero.second_attack_arrive and get_distance_ab(l_hero_sort[1], m) <= 1280 else 0):
                             # Near enough, kick it
                             curr_hero.ball = m
                             curr_hero.wind_spell = True
+                            if (get_distance_ab(l_hero_sort[1], m) <= 1280 and l_hero_sort[1].role=='O1'):
+                                l_hero_sort[1].wind_spell = True
                         elif m.threatFor != 2 \
                             and curr_hero.get_distance(m) <= 2200:
                             curr_hero.ball = m
@@ -524,36 +531,47 @@ while True:
         if curr_hero.ball:
             curr_hero.target = None
             curr_hero.patrol = curr_hero.base.fp3
+
         # should I use spell or should I just farming
-        if curr_hero.spell_check(my_base.l_monster, my_base.mana):
-            my_base.mana -= 10
+        if curr_hero.role != 'O1':
+            if curr_hero.spell_check(my_base.l_monster, my_base.mana):
+                my_base.mana -= 10
+
+    if l_hero_sort[1].role == 'O1':
+        l_hero_sort[1].target = l_hero_sort[2].target if l_hero_sort[2].target else l_hero_sort[2]
+        l_hero_sort[1].ball = l_hero_sort[2].ball
+        l_hero_sort[1].find_solution = 'CL' # Clone
 
     for h in l_heroes:
         # print("Command order: " + str(h.id), file=sys.stderr, flush=True)
         if h.wind_spell:
-            if h.role == 'O':
+            if h.role[0] == 'O':
+                m = h.ball if h.ball else h.target
                 print("SPELL WIND {} {} {}".format(
-                    enemy_base.x, enemy_base.y, h.get_detail()))
-            elif len(my_base.threat_heros) == 1 and h.get_distance(my_base.threat_heros[0]) > 1280:
-                t = my_base.threat_heros[0]
-                if my_base.x == 0 and  t.x+2000 <= t.y:
-                    print("SPELL WIND {} {} {}".format(
-                        6500, 400, h.get_detail()))
-                elif my_base.x == 0 and t.x > t.y+2000:
-                    print("SPELL WIND {} {} {}".format(
-                        400, 6500, h.get_detail()))
-                elif my_base.x == 17630 and 17630-t.x+2000 <= 9000-t.y:
-                    print("SPELL WIND {} {} {}".format(
-                        17630-6500, 9000-400, h.get_detail()))
-                elif my_base.x == 17630 and 17630-t.x > 9000-t.y+2000:
-                    print("SPELL WIND {} {} {}".format(
-                        17630-400, 9000-6500, h.get_detail()))
-                else:
-                    print("SPELL WIND {} {} {}".format(
-                        enemy_base.x, enemy_base.y, h.get_detail()))
+                    enemy_base.x-(m.x-h.x), # enemy_base.x if abs(m.x-enemy_base.x) > 30 else h.x,
+                    enemy_base.y-(m.y-h.y), # enemy_base.y if abs(m.y-enemy_base.y) > 30 else h.y,
+                    h.get_detail()))
+            # elif len(my_base.threat_heros) == 1 and h.get_distance(my_base.threat_heros[0]) > 1280:
+            #     t = my_base.threat_heros[0]
+            #     if my_base.x == 0 and  t.x+2000 <= t.y:
+            #         print("SPELL WIND {} {} {}".format(
+            #             6500, 400, h.get_detail()))
+            #     elif my_base.x == 0 and t.x > t.y+2000:
+            #         print("SPELL WIND {} {} {}".format(
+            #             400, 6500, h.get_detail()))
+            #     elif my_base.x == 17630 and 17630-t.x+2000 <= 9000-t.y:
+            #         print("SPELL WIND {} {} {}".format(
+            #             17630-6500, 9000-400, h.get_detail()))
+            #     elif my_base.x == 17630 and 17630-t.x > 9000-t.y+2000:
+            #         print("SPELL WIND {} {} {}".format(
+            #             17630-400, 9000-6500, h.get_detail()))
+            #     else:
+            #         print("SPELL WIND {} {} {}".format(
+            #             enemy_base.x, enemy_base.y, h.get_detail()))
             else:
                 print("SPELL WIND {} {} {}".format(
-                    enemy_base.x, enemy_base.y, h.get_detail()))
+                    30 if enemy_base.x == 0 else enemy_base.x - 30,
+                    30 if enemy_base.y == 0 else enemy_base.y - 30, h.get_detail()))
             h.act_log[:0] = ['W']
         elif h.shield_spell:
             print("SPELL SHIELD {} {}".format(h.shield_spell, h.get_detail()))
@@ -564,7 +582,7 @@ while True:
             h.act_log[:0] = ['C']
         elif h.ball:
             # If ball is threat, I want to protect it, otherwise I just follow it
-            if h.ball.threatFor == 2 and h.ball.nearBase:
+            if h.ball.threatFor == 2 and h.ball.nearBase and h.role=='O':
                 # Is there any enemy hero close to the ball?
                 l_e_hero_sort = []
                 for k, v in enemy_base.heroes.items():
